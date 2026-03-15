@@ -888,10 +888,20 @@ def score_symbolic_match(phrase_tokens: List[str], ent: Entity, world: World) ->
 
 
 def affordance_bonus(verb: str, ent: Entity, slot_name: str, prep: Optional[str]) -> float:
-    """Bonus if the candidate entity fits the intended action."""
+    """
+    Bonus (or penalty) score if the candidate entity fits the intended action.
+
+    These bonuses break ties when a single token matches multiple entities.
+    For example, "oil" matches both oil_lamp and lamp_oil — but for the iobj
+    slot of FILL, a liquid_source scores +2.0 and a lightable scores -1.0,
+    so the flask wins decisively without a clarification prompt.
+
+    Rules are grouped by slot (obj vs iobj) and then by verb.
+    """
     bonus = 0.0
 
     if slot_name == "obj":
+        # --- Original verbs ---
         if verb == "take" and "portable" in ent.tags and "scenery" not in ent.tags:
             bonus += 2.0
         if verb in {"open", "close"} and "openable" in ent.tags:
@@ -903,13 +913,67 @@ def affordance_bonus(verb: str, ent: Entity, slot_name: str, prep: Optional[str]
         if "scenery" in ent.tags and verb == "take":
             bonus -= 2.0
 
+        # --- New verbs ---
+        # LIGHT / EXTINGUISH: prefer lightable entities in obj slot
+        if verb == "light" and "lightable" in ent.tags:
+            bonus += 2.0
+        if verb == "extinguish" and "lightable" in ent.tags:
+            bonus += 2.0
+
+        # READ: prefer readable entities
+        if verb == "read" and "readable" in ent.tags:
+            bonus += 2.0
+
+        # PULL / PUSH: prefer pullable/pushable entities
+        if verb == "pull" and "pullable" in ent.tags:
+            bonus += 2.0
+        if verb == "push" and "pushable" in ent.tags:
+            bonus += 2.0
+
+        # FILL (obj slot = the vessel being filled): prefer lightable/container
+        # The flask is the iobj (source), not the obj, so penalise liquid_source here.
+        if verb == "fill" and "lightable" in ent.tags:
+            bonus += 2.0
+        if verb == "fill" and "liquid_source" in ent.tags:
+            bonus -= 1.5   # flask is the iobj of fill, not the obj
+
+        # POUR (obj slot = the source being poured from): prefer liquid_source
+        if verb == "pour" and "liquid_source" in ent.tags:
+            bonus += 2.0
+        if verb == "pour" and "lightable" in ent.tags:
+            bonus -= 1.5   # lamp is iobj of pour, not obj
+
+        # WEAR / REMOVE: prefer wearable entities
+        if verb == "wear" and "wearable" in ent.tags:
+            bonus += 2.0
+        if verb == "remove" and "wearable" in ent.tags:
+            bonus += 2.0
+
     if slot_name == "iobj":
+        # --- Original verbs ---
         if verb == "put" and prep in {"in", "into", "inside"} and "container" in ent.tags:
             bonus += 2.0
         if verb == "put" and prep in {"on", "onto"} and "support" in ent.tags:
             bonus += 2.0
         if verb == "unlock" and prep == "with" and "portable" in ent.tags:
             bonus += 1.0
+
+        # --- New verbs ---
+        # FILL (iobj slot = the liquid source): prefer liquid_source, penalise lightable
+        if verb == "fill" and prep in {"with", "from"} and "liquid_source" in ent.tags:
+            bonus += 2.5
+        if verb == "fill" and "lightable" in ent.tags:
+            bonus -= 2.0   # the lamp is the obj of fill, not the iobj
+
+        # POUR (iobj slot = the target container): prefer containers/basins
+        if verb == "pour" and "container" in ent.tags:
+            bonus += 2.0
+        if verb == "pour" and "liquid_source" in ent.tags:
+            bonus -= 1.0   # source flasks are obj of pour, not iobj
+
+        # UNLOCK (iobj slot = the key): prefer entities with key_id
+        if verb == "unlock" and ent.props.get("key_id") is not None:
+            bonus += 1.5
 
     return bonus
 
@@ -1053,17 +1117,21 @@ def ground_intent(
         phrase_tokens = [t for t in normalize(str(phrase)).split() if t not in FILLER]
         one_word = len(phrase_tokens) == 1
 
-        if one_word and len(matches) >= 2:
-            options = [eid for eid, _ in matches[:5]]
-            question = make_clarification_question(world, options)
-            return None, clarify_ir(question=question, options=options, pending=pending)
-
         top_score = matches[0][1]
-        tied = [eid for eid, score in matches if abs(score - top_score) < 0.15]
+
+        # Compute a margin that is tighter for single-word phrases.
+        # Multi-word phrases use 0.15; single-word phrases use 0.5 so that
+        # affordance bonuses (which are ±1.0 to ±2.5) have room to break ties.
+        # Only fall through to clarification when the top two scores are truly
+        # indistinguishable after all bonuses are applied.
+        tie_margin = 0.5 if one_word else 0.15
+
+        tied = [eid for eid, score in matches if abs(score - top_score) < tie_margin]
 
         if len(tied) == 1:
             return tied[0], None
 
+        # Genuine tie: ask the player to disambiguate.
         options = tied[:5]
         question = make_clarification_question(world, options)
         return None, clarify_ir(question=question, options=options, pending=pending)

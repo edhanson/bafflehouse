@@ -128,7 +128,7 @@ def build_demo_world() -> World:
             # NOTE: The player can enter the cellar immediately, but entities
             # with "requires_light": True are only visible while carrying a lit
             # lamp.  The lever (and therefore the hall passage) requires light.
-        ),
+        )
     }
 
     # ----------------------------------------------------------
@@ -425,7 +425,7 @@ def build_demo_world() -> World:
                 "worn": False,
             },
             location="display_case"
-        ),
+        )
     }
 
     # ----------------------------------------------------------

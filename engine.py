@@ -1118,7 +1118,22 @@ def process_input(
         if grounded["type"] == "clarify":
             return format_clarification(world, grounded), grounded
 
-        out, consumed = exec_action(world, grounded)
+        # resolve_clarification fills in only the one ambiguous slot that was
+        # asked about.  The other slot (e.g. iobj) may still be a raw phrase
+        # rather than a grounded entity id.  We pass the result back through
+        # ground_intent so both slots are fully resolved before the handler runs.
+        parser_system.semantic_entity_index.rebuild_for_visible(world)
+        fully_grounded = ground_intent(
+            world=world,
+            intent=grounded,
+            semantic_index=parser_system.semantic_entity_index,
+        )
+
+        # If grounding the second slot also produces a clarification, surface it.
+        if fully_grounded.get("type") == "clarify":
+            return format_clarification(world, fully_grounded), fully_grounded
+
+        out, consumed = exec_action(world, fully_grounded)
         if consumed:
             world.clock.advance(1)
         return out, None
