@@ -1,0 +1,5 @@
+env/
+deprecated_files/
+models/
+__pycache__
+OLD/
