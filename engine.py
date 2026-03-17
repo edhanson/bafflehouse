@@ -762,40 +762,147 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
     return "You pull it. Something shifts, but nothing dramatic happens.", True
 
 
+def _apply_liquid_to_vessel(
+    world: World,
+    vessel_eid: str,
+    source_eid: str,
+) -> Tuple[str, bool]:
+    """
+    Core liquid-transfer logic shared by handle_fill and handle_pour.
+
+    Transfers liquid from source_eid into vessel_eid.  Both entities must
+    already be confirmed as valid and in-scope before this is called —
+    all precondition checks (visibility, inventory, empty-source) live in
+    the calling handler.
+
+    Handles:
+      - Puzzle 1: oil into oil_lamp  (fuelling)
+      - Puzzle 3: water into stone_basin  (ring-activated reveal)
+      - Generic: any liquid into any open container
+    """
+    vessel_ent = world.entity(vessel_eid)
+    source_ent = world.entity(source_eid)
+    liquid = source_ent.props.get("liquid")
+
+    # ---- Puzzle 1: oil into the lamp ----
+    if vessel_eid == "oil_lamp" and liquid == "oil":
+        if vessel_ent.props.get("fuelled", False):
+            return "The lamp is already full of oil.", False
+
+        vessel_ent.props["fuelled"] = True
+        source_ent.props["empty"] = True
+        world.note_ref([vessel_eid, source_eid])
+        return (
+            "You carefully tip the flask. Oil flows into the lamp's reservoir "
+            "with a quiet glug. The flask is now empty."
+        ), True
+
+    # Reject wrong liquid type for a lightable vessel.
+    if "lightable" in vessel_ent.tags:
+        return "That doesn't take that kind of liquid.", False
+
+    # ---- Puzzle 3: water into stone basin ----
+    if vessel_eid == "stone_basin" and liquid == "water":
+        if vessel_ent.props.get("activated", False):
+            return "The basin already holds the water. The serpents are still.", False
+
+        # Check whether the player is wearing the silver ring.
+        ring = world.entities.get("silver_ring")
+        ring_worn = (
+            ring is not None
+            and ring.location == "player"
+            and ring.props.get("worn", False)
+        )
+
+        if not ring_worn:
+            # Water goes in but nothing magical happens yet.
+            vessel_ent.props["liquid"] = "water"
+            source_ent.props["empty"] = True
+            world.note_ref([vessel_eid, source_eid])
+            return (
+                "You pour the water into the basin. It sits there, cold and still. "
+                "The serpent carvings seem to watch, unimpressed. "
+                "Perhaps something is missing."
+            ), True
+
+        # Ring worn — trigger the puzzle payoff.
+        vessel_ent.props["activated"] = True
+        vessel_ent.props["liquid"] = "water"
+        source_ent.props["empty"] = True
+        move_entity(world, "ancient_scroll", "stone_basin")
+        world.note_ref([vessel_eid, source_eid, "ancient_scroll"])
+        return (
+            "The moment the water touches the basin, the ring on your finger grows warm. "
+            "The carved serpents seem to writhe — a trick of the light, surely — and "
+            "the water begins to glow with a faint green luminescence.\n\n"
+            "Something rises from beneath the water: a tightly rolled scroll, bone dry "
+            "despite the liquid around it. It comes to rest at the basin's rim as if "
+            "placed there by an invisible hand."
+        ), True
+
+    # Generic: pour any liquid into any open container.
+    vessel_ent.props["liquid"] = liquid
+    source_ent.props["empty"] = True
+    world.note_ref([vessel_eid, source_eid])
+    return narrate(["Done.", f"You pour the {liquid} in."]), True
+
+
 def handle_fill(world: World, ir: dict) -> Tuple[str, bool]:
     """
     Fill a vessel from a liquid source.
 
-    Syntax: FILL <vessel> WITH <source>
-    e.g.   "fill lamp with oil"
+    Canonical syntax: FILL <vessel> WITH <source>
+      e.g. "fill lamp with oil", "fill lamp with flask"
 
-    Puzzle hook:
-      - Filling the oil_lamp with lamp_oil sets lamp.props["fuelled"] = True
-        and marks the flask as empty.
+    Also accepts the reversed pour-style framing by detecting when obj is a
+    liquid source and iobj is the vessel, and swapping them before delegating
+    to _apply_liquid_to_vessel.  This means "fill flask into lamp" is handled
+    gracefully even though it is grammatically fill-shaped.
     """
-    obj = ir.get("obj")   # the vessel being filled
-    iobj = ir.get("iobj") # the liquid source
+    obj = ir.get("obj")
+    iobj = ir.get("iobj")
 
     if not obj:
         return "Fill what?", False
     if obj not in world.entities:
         return "You don't see that here.", False
 
-    # The target vessel must be in inventory.
-    if obj not in world.player.inventory:
+    visible = visible_entities_for_room(world)
+
+    obj_ent = world.entity(obj)
+    iobj_ent = world.entity(iobj) if iobj and iobj in world.entities else None
+
+    # Detect reversed framing: "fill [source] into [vessel]"
+    # e.g. the player wrote "fill flask into lamp" meaning pour flask into lamp.
+    # Swap the slots so vessel=iobj, source=obj and proceed normally.
+    if (
+        iobj_ent is not None
+        and "liquid_source" in obj_ent.tags
+        and "liquid_source" not in iobj_ent.tags
+    ):
+        obj, iobj = iobj, obj
+        obj_ent, iobj_ent = iobj_ent, obj_ent
+
+    # Now obj = vessel, iobj = source.
+    vessel_eid = obj
+    source_eid = iobj
+
+    vessel_ent = world.entity(vessel_eid)
+    # Portable vessels must be in inventory; fixed/scenery containers
+    # (like the stone basin) may be in the room instead.
+    vessel_visible = vessel_eid in visible_entities_for_room(world)
+    if vessel_eid not in world.player.inventory and not vessel_visible:
+        return "You don't see that here.", False
+    if "portable" in vessel_ent.tags and vessel_eid not in world.player.inventory:
         return "You'd need to be holding it to fill it.", False
 
-    if not iobj:
+    if not source_eid:
         return "Fill it with what?", False
-    if iobj not in world.entities:
+    if source_eid not in world.entities:
         return "You don't have that.", False
 
-    # The source must also be in inventory (or visible — we allow either).
-    source_ent = world.entity(iobj)
-    vessel_ent = world.entity(obj)
-
-    visible = visible_entities_for_room(world)
-    if iobj not in world.player.inventory and iobj not in visible:
+    source_ent = world.entity(source_eid)
+    if source_eid not in world.player.inventory and source_eid not in visible:
         return "You don't have that.", False
 
     if "liquid_source" not in source_ent.tags:
@@ -804,27 +911,7 @@ def handle_fill(world: World, ir: dict) -> Tuple[str, bool]:
     if source_ent.props.get("empty", False):
         return "It's empty — there's nothing left to pour.", False
 
-    # ---- Puzzle 1: fill lamp with oil ----
-    if obj == "oil_lamp" and source_ent.props.get("liquid") == "oil":
-        if vessel_ent.props.get("fuelled", False):
-            return "The lamp is already full of oil.", False
-
-        vessel_ent.props["fuelled"] = True
-        source_ent.props["empty"] = True  # consume the flask
-        world.note_ref([obj, iobj])
-
-        return (
-            "You carefully tip the flask. Oil flows into the lamp's reservoir "
-            "with a quiet glug. The flask is now empty."
-        ), True
-
-    # Generic fill (future-proofing for other vessel/liquid combos)
-    if "lightable" in vessel_ent.tags:
-        return "That doesn't take that kind of liquid.", False
-
-    return (
-        f"You're not sure how to fill {vessel_ent.name} with {source_ent.name}."
-    ), False
+    return _apply_liquid_to_vessel(world, vessel_eid, source_eid)
 
 
 def handle_pour(world: World, ir: dict) -> Tuple[str, bool]:
@@ -868,60 +955,18 @@ def handle_pour(world: World, ir: dict) -> Tuple[str, bool]:
 
     target_ent = world.entity(iobj)
 
+    # If the target is a lightable vessel (e.g. the oil lamp), treat this
+    # as a fuelling action and delegate to the shared helper.  This makes
+    # "pour flask into lamp" equivalent to "fill lamp with flask".
+    if "lightable" in target_ent.tags:
+        return _apply_liquid_to_vessel(world, iobj, obj)
+
     if "container" not in target_ent.tags:
         return "You can't pour things into that.", False
 
-    # ---- Puzzle 3: pour water into stone basin ----
-    if iobj == "stone_basin" and source_ent.props.get("liquid") == "water":
-        if target_ent.props.get("activated", False):
-            return "The basin already holds the water. The serpents are still.", False
-
-        # Check if the player is wearing the silver ring.
-        ring = world.entities.get("silver_ring")
-        ring_worn = (
-            ring is not None
-            and ring.location == "player"
-            and ring.props.get("worn", False)
-        )
-
-        if not ring_worn:
-            # The water goes in, but nothing special happens yet.
-            target_ent.props["liquid"] = "water"
-            source_ent.props["empty"] = True
-            world.note_ref([obj, iobj])
-            return (
-                "You pour the water into the basin. It sits there, cold and still. "
-                "The serpent carvings seem to watch, unimpressed. "
-                "Perhaps something is missing."
-            ), True
-
-        # Ring is worn — trigger the puzzle.
-        target_ent.props["activated"] = True
-        target_ent.props["liquid"] = "water"
-        source_ent.props["empty"] = True
-
-        # Reveal the ancient scroll: move it from "hidden" into the basin.
-        move_entity(world, "ancient_scroll", "stone_basin")
-        # Also add it to the world's visible entity list via the basin's contains.
-        # (move_entity already handles this since stone_basin is an entity.)
-
-        world.note_ref([obj, iobj, "ancient_scroll"])
-
-        return (
-            "The moment the water touches the basin, the ring on your finger grows warm. "
-            "The carved serpents seem to writhe — a trick of the light, surely — and "
-            "the water begins to glow with a faint green luminescence.\n\n"
-            "Something rises from beneath the water: a tightly rolled scroll, bone dry "
-            "despite the liquid around it. It comes to rest at the basin's rim as if "
-            "placed there by an invisible hand."
-        ), True
-
-    # Generic pour into a container.
-    liquid = source_ent.props.get("liquid", "liquid")
-    source_ent.props["empty"] = True
-    target_ent.props["liquid"] = liquid
-    world.note_ref([obj, iobj])
-    return narrate(["Poured.", f"You pour the {liquid} in."]), True
+    # All container targets (including stone_basin with its Puzzle 3 hook)
+    # are now handled centrally in _apply_liquid_to_vessel.
+    return _apply_liquid_to_vessel(world, iobj, obj)
 
 
 def handle_wear(world: World, ir: dict) -> Tuple[str, bool]:
