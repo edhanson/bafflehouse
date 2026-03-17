@@ -28,7 +28,7 @@ from parser import (
     ground_intent,
     normalize,
     parse_to_candidates,
-    split_compound,
+    split_compound
 )
 
 
@@ -306,16 +306,29 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     ent = world.entity(obj)
     world.note_ref([obj])
 
-    lines = [ent.props.get("desc", "You see nothing special.")]
+    # For liquid-bearing containers, swap to the empty description once drained.
+    if ent.props.get("empty", False) and "desc_empty" in ent.props:
+        desc = ent.props["desc_empty"]
+    else:
+        desc = ent.props.get("desc", "You see nothing special.")
+    lines = [desc]
 
     if "openable" in ent.tags:
         lines.append("It is open." if ent.props.get("open", False) else "It is closed.")
 
     if "container" in ent.tags and ent.props.get("open", False):
+        # Solid contents: child entities tracked in ent.contains.
         if ent.contains:
             contents = ", ".join(world.entity(cid).name for cid in ent.contains)
             lines.append(f"It contains {contents}.")
-        else:
+ 
+        # Liquid contents are stored in props["liquid"], not as child entities.
+        # props["empty"] is set True once the liquid has been used or poured out.
+        liquid = ent.props.get("liquid")
+        if liquid and not ent.props.get("empty", False):
+            lines.append(f"It contains {liquid}.")
+        elif not ent.contains and (not liquid or ent.props.get("empty", False)):
+            # Only say "empty" when there are truly no solid or liquid contents.
             lines.append("It is empty.")
 
     # Report lit/fuelled state for lamps.
@@ -1031,7 +1044,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "pour":       handle_pour,
     "wear":       handle_wear,
     "remove":     handle_remove,
-    "use":        handle_use,
+    "use":        handle_use
 }
 
 

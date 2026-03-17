@@ -242,7 +242,7 @@ def build_demo_world() -> World:
                     "household accounts, but near the back you find an entry that reads:\n\n"
                     "\"I have hidden the reserve key in the old way — the stag knows "
                     "where it rests. A firm pull on the heavy antler will remind him.\""
-                ),
+                )
             },
             location="display_case"
         ),
@@ -266,7 +266,7 @@ def build_demo_world() -> World:
                     "antler looks heavier than the other, as if it were cast separately "
                     "and bolted on. It invites curiosity."
                 ),
-                "pulled": False,
+                "pulled": False
             },
             location="trophy_room"
         ),
@@ -322,7 +322,7 @@ def build_demo_world() -> World:
                 ),
                 "open": True,   # no lid — always accessible
                 "activated": False,
-                "liquid": None,
+                "liquid": None
             },
             location="secret_study"
         ),
@@ -339,7 +339,7 @@ def build_demo_world() -> World:
                     "\"To he who bears the Serpent Ring and brings the water of patience: "
                     "the lower vault is opened by speaking the three words carved into "
                     "the cellar's eastern wall. Go there now and look carefully.\""
-                ),
+                )
             },
             location="hidden"
         ),
@@ -358,7 +358,7 @@ def build_demo_world() -> World:
             props={
                 "desc": "A battered tin oil lamp with a glass chimney. It needs fuel.",
                 "lit": False,
-                "fuelled": False,
+                "fuelled": False
             },
             location="cellar"
         ),
@@ -371,7 +371,7 @@ def build_demo_world() -> World:
             props={
                 "desc": "A small glass flask, half-full of clear lamp oil.",
                 "liquid": "oil",
-                "empty": False,
+                "empty": False
             },
             location="cellar"
         ),
@@ -384,10 +384,11 @@ def build_demo_world() -> World:
             tags={"portable", "container", "liquid_source"},
             props={
                 "desc": "A heavy clay ewer. It sloshes when you move it — there is water inside.",
+                "desc_empty": "A heavy clay ewer, now dry and light.",
                 "liquid": "water",
                 "empty": False,
                 "open": True,
-                "requires_light": True,  # only visible in dark cellar with lit lamp
+                "requires_light": True  # only visible in dark cellar with lit lamp
             },
             location="cellar"
         ),
@@ -405,7 +406,7 @@ def build_demo_world() -> World:
                     "mechanism suggests it controls something elsewhere in the house."
                 ),
                 "pulled": False,
-                "requires_light": True,  # only visible with lit lamp
+                "requires_light": True  # only visible with lit lamp
             },
             location="cellar"
         ),
@@ -422,7 +423,7 @@ def build_demo_world() -> World:
                     "Their eyes are tiny chips of green stone. It has an air of "
                     "quiet significance."
                 ),
-                "worn": False,
+                "worn": False
             },
             location="display_case"
         )
