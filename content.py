@@ -56,25 +56,24 @@ def build_demo_world() -> World:
             title="Foyer",
             desc=(
                 "You are standing in a small foyer. A dusty chandelier sulks overhead. "
-                "A heavy door to the north bears an old lock. "
+                "A heavy oak door to the north stands between you and the rest of the manor. "
                 "A narrow staircase descends to the west."
             ),
-            exits={"north": "hall", "west": "cellar"}
+            exits={"west": "cellar"}  # "north" is added dynamically when the oak door is opened
         ),
         "hall": Room(
             rid="hall",
             title="Hall",
             desc=(
                 "A long hall stretches into gloom. Stone walls are hung with faded "
-                "hunting portraits. Exits lead south back to the foyer, east into what "
-                "looks like a library, and north toward a trophy room. "
+                "hunting portraits. The oak door to the south leads back toward the foyer. "
+                "Exits also lead east into what looks like a library and north toward a trophy room. "
                 "A section of the west wall looks subtly different from the rest — "
                 "the stonework is newer, as if something was once bricked over."
             ),
-            exits={"south": "foyer", "east": "library", "north": "trophy_room"}
-            # NOTE: The "west" exit to the cellar passage is added dynamically
-            # by the lever puzzle in engine.py (handle_pull).  It does not exist
-            # in the starting state so the player cannot bypass puzzle 1.
+            exits={"east": "library", "north": "trophy_room"}
+            # NOTE: "south" is added dynamically when the oak door is opened.
+            # NOTE: "west" is added dynamically by the lever puzzle in handle_pull.
         ),
 
         # --- New rooms ---
@@ -128,7 +127,7 @@ def build_demo_world() -> World:
             # NOTE: The player can enter the cellar immediately, but entities
             # with "requires_light": True are only visible while carrying a lit
             # lamp.  The lever (and therefore the hall passage) requires light.
-        )
+        ),
     }
 
     # ----------------------------------------------------------
@@ -242,7 +241,7 @@ def build_demo_world() -> World:
                     "household accounts, but near the back you find an entry that reads:\n\n"
                     "\"I have hidden the reserve key in the old way — the stag knows "
                     "where it rests. A firm pull on the heavy antler will remind him.\""
-                )
+                ),
             },
             location="display_case"
         ),
@@ -266,7 +265,7 @@ def build_demo_world() -> World:
                     "antler looks heavier than the other, as if it were cast separately "
                     "and bolted on. It invites curiosity."
                 ),
-                "pulled": False
+                "pulled": False,
             },
             location="trophy_room"
         ),
@@ -322,7 +321,7 @@ def build_demo_world() -> World:
                 ),
                 "open": True,   # no lid — always accessible
                 "activated": False,
-                "liquid": None
+                "liquid": None,
             },
             location="secret_study"
         ),
@@ -339,7 +338,7 @@ def build_demo_world() -> World:
                     "\"To he who bears the Serpent Ring and brings the water of patience: "
                     "the lower vault is opened by speaking the three words carved into "
                     "the cellar's eastern wall. Go there now and look carefully.\""
-                )
+                ),
             },
             location="hidden"
         ),
@@ -358,7 +357,7 @@ def build_demo_world() -> World:
             props={
                 "desc": "A battered tin oil lamp with a glass chimney. It needs fuel.",
                 "lit": False,
-                "fuelled": False
+                "fuelled": False,
             },
             location="cellar"
         ),
@@ -371,7 +370,7 @@ def build_demo_world() -> World:
             props={
                 "desc": "A small glass flask, half-full of clear lamp oil.",
                 "liquid": "oil",
-                "empty": False
+                "empty": False,
             },
             location="cellar"
         ),
@@ -388,7 +387,7 @@ def build_demo_world() -> World:
                 "liquid": "water",
                 "empty": False,
                 "open": True,
-                "requires_light": True  # only visible in dark cellar with lit lamp
+                "requires_light": True,  # only visible in dark cellar with lit lamp
             },
             location="cellar"
         ),
@@ -406,7 +405,7 @@ def build_demo_world() -> World:
                     "mechanism suggests it controls something elsewhere in the house."
                 ),
                 "pulled": False,
-                "requires_light": True  # only visible with lit lamp
+                "requires_light": True,  # only visible with lit lamp
             },
             location="cellar"
         ),
@@ -423,10 +422,10 @@ def build_demo_world() -> World:
                     "Their eyes are tiny chips of green stone. It has an air of "
                     "quiet significance."
                 ),
-                "worn": False
+                "worn": False,
             },
             location="display_case"
-        )
+        ),
     }
 
     # ----------------------------------------------------------

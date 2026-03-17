@@ -28,7 +28,7 @@ from parser import (
     ground_intent,
     normalize,
     parse_to_candidates,
-    split_compound
+    split_compound,
 )
 
 
@@ -321,7 +321,7 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
         if ent.contains:
             contents = ", ".join(world.entity(cid).name for cid in ent.contains)
             lines.append(f"It contains {contents}.")
- 
+
         # Liquid contents are stored in props["liquid"], not as child entities.
         # props["empty"] is set True once the liquid has been used or poured out.
         liquid = ent.props.get("liquid")
@@ -423,6 +423,23 @@ def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
 
     ent.props["open"] = True
     world.note_ref([obj])
+
+    # Both lockable doors use the same pattern: opening adds the compass
+    # exits that allow the player to walk through; closing removes them.
+    # This means unlock + open is always required to gain passage, which
+    # is consistent between the oak door and the study door.
+    if obj == "oak_door":
+        world.rooms["foyer"].exits["north"] = "hall"
+        world.rooms["hall"].exits["south"] = "foyer"
+        return "The oak door swings open, revealing the hall beyond.", True
+
+    if obj == "study_door":
+        world.rooms["trophy_room"].exits["north"] = "secret_study"
+        world.rooms["secret_study"].exits["south"] = "trophy_room"
+        return (
+            "The heavy door swings inward, revealing a dark passage to the north."
+        ), True
+
     return narrate(["Opened.", "The thing opens.", "With a modest show of cooperation, it opens."]), True
 
 
@@ -450,6 +467,18 @@ def handle_close(world: World, ir: dict) -> Tuple[str, bool]:
 
     ent.props["open"] = False
     world.note_ref([obj])
+
+    # Mirror of handle_open: closing a door removes the compass exits.
+    if obj == "oak_door":
+        world.rooms["foyer"].exits.pop("north", None)
+        world.rooms["hall"].exits.pop("south", None)
+        return "The oak door swings shut with a heavy thud.", True
+
+    if obj == "study_door":
+        world.rooms["trophy_room"].exits.pop("north", None)
+        world.rooms["secret_study"].exits.pop("south", None)
+        return "The heavy door grinds shut behind you.", True
+
     return narrate(["Closed.", "The thing closes."]), True
 
 
@@ -531,16 +560,9 @@ def handle_unlock(world: World, ir: dict) -> Tuple[str, bool]:
     thing.props["locked"] = False
     world.note_ref([obj, iobj])
 
-    # Special case: unlocking the study door reveals the north exit.
-    # The door connects trophy_room <-> secret_study, so we add "north"
-    # to the trophy room's exits so the player can walk through normally.
-    if obj == "study_door":
-        world.rooms["trophy_room"].exits["north"] = "secret_study"
-        return (
-            "The lock clicks open. The heavy door swings inward, revealing a dark "
-            "passage to the north."
-        ), True
-
+    # Both doors (oak_door, study_door) follow the same two-step pattern:
+    # unlock removes the lock, open adds the compass exit.  Unlocking alone
+    # does not grant passage — the player must also open the door.
     return narrate(["Unlocked.", "The lock clicks open."]), True
 
 
@@ -1044,7 +1066,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "pour":       handle_pour,
     "wear":       handle_wear,
     "remove":     handle_remove,
-    "use":        handle_use
+    "use":        handle_use,
 }
 
 
