@@ -68,6 +68,7 @@ def build_demo_world() -> World:
                 "A long hall stretches into gloom. Stone walls are hung with faded "
                 "hunting portraits. The oak door to the south leads back toward the foyer. "
                 "Exits also lead east into what looks like a library and north toward a trophy room. "
+                "A dusty side table near the door holds what appears to be a journal. "
                 "A section of the west wall looks subtly different from the rest — "
                 "the stonework is newer, as if something was once bricked over."
             ),
@@ -117,6 +118,9 @@ def build_demo_world() -> World:
         "cellar": Room(
             rid="cellar",
             title="Wine Cellar",
+            # desc is selected dynamically in do_look() based on lamp state.
+            # desc_dark is used when the player has no lit lamp;
+            # desc_lit  is used when they do.
             desc=(
                 "A vaulted cellar. Stone racks hold the dusty ghosts of wine bottles, "
                 "most long since emptied or broken. Without light, the far end of the "
@@ -124,11 +128,27 @@ def build_demo_world() -> World:
                 "make it out. The foyer is back up the stairs to the east."
             ),
             exits={"east": "foyer"}
-            # NOTE: The player can enter the cellar immediately, but entities
-            # with "requires_light": True are only visible while carrying a lit
-            # lamp.  The lever (and therefore the hall passage) requires light.
         ),
     }
+
+    # Dynamic room descriptions referenced by do_look() in engine.py.
+    # The cellar has two descriptions depending on whether the player
+    # is carrying a lit lamp.
+    rooms["cellar"].desc = (
+        "A vaulted cellar. Stone racks hold the dusty ghosts of wine bottles, "
+        "most long since emptied or broken. Without light, the far end of the "
+        "room is impenetrably dark — you can tell something is there but cannot "
+        "make it out. The foyer is back up the stairs to the east."
+    )
+    # Store the lit description as a room attribute so engine.py can
+    # retrieve it without hard-coding strings outside of content.py.
+    rooms["cellar"].desc_lit = (
+        "A vaulted cellar. Stone racks hold the dusty ghosts of wine bottles, "
+        "most long since emptied or broken. By the light of the lamp the far "
+        "end of the room resolves into view: rough stone walls, a few broken "
+        "crates, and what looks like an iron lever set into the far wall. "
+        "The foyer is back up the stairs to the east."
+    )
 
     # ----------------------------------------------------------
     # Entities
@@ -167,10 +187,26 @@ def build_demo_world() -> World:
             aliases=["box", "wooden box", "small box", "container", "crate"],
             tags={"openable", "container"},
             props={
-                "desc": "A small wooden box with a hinged lid.",
+                "desc": "A small wooden box with a hinged lid. Something rattles faintly inside.",
                 "open": False
             },
             location="foyer"
+        ),
+        # A box of matches inside the wooden box.
+        # Required to light the oil lamp (Puzzle 1).
+        # matches_remaining tracks how many are left; the box is reusable
+        # until the count reaches zero, at which point the player is stuck.
+        "matchbox": Entity(
+            eid="matchbox",
+            name="a box of matches",
+            aliases=["matches", "match", "matchbox", "box of matches", "match box"],
+            tags={"portable", "fire_source"},
+            props={
+                "desc": "A small cardboard box of safety matches. Several have been used.",
+                "desc_empty": "An empty matchbox. Every last match has been spent.",
+                "matches_remaining": 10,
+            },
+            location="wooden_box"
         ),
         "chandelier": Entity(
             eid="chandelier",
@@ -218,8 +254,8 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "A glass-fronted display case, locked with a small brass clasp. "
-                    "Inside you can make out what looks like a leather journal "
-                    "and something that gleams."
+                    "Inside you can make out a gleaming ring and what looks like "
+                    "a folded piece of paper."
                 ),
                 "open": False,
                 "locked": True,
@@ -227,15 +263,17 @@ def build_demo_world() -> World:
             },
             location="library"
         ),
-        # The journal is inside the display case.
-        # Reading it gives the clue about the stag antler.
+        # The journal has been moved to the hall — the player finds it
+        # after unlocking the oak door, before reaching the trophy room.
+        # This ensures the antler clue is discovered before the display
+        # case puzzle rather than being locked inside it.
         "journal": Entity(
             eid="journal",
             name="an old journal",
             aliases=["journal", "old journal", "book", "leather journal", "diary"],
             tags={"portable", "readable"},
             props={
-                "desc": "A leather-bound journal, its pages brown with age.",
+                "desc": "A leather-bound journal, left on a dusty side table.",
                 "readable_text": (
                     "The handwriting is cramped and hurried. Most entries are mundane "
                     "household accounts, but near the back you find an entry that reads:\n\n"
@@ -243,7 +281,7 @@ def build_demo_world() -> World:
                     "where it rests. A firm pull on the heavy antler will remind him.\""
                 ),
             },
-            location="display_case"
+            location="hall"
         ),
 
         # ======================================================
@@ -347,6 +385,25 @@ def build_demo_world() -> World:
         # CELLAR entities  (Puzzle 1)
         # ======================================================
 
+        # The far wall of the cellar — scenery, requires light.
+        # In the dark, require_visible returns a darkness message.
+        # When lit, examining the wall describes it and mentions the lever.
+        "cellar_wall": Entity(
+            eid="cellar_wall",
+            name="the far wall",
+            aliases=["wall", "far wall", "stone wall", "cellar wall", "walls"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "The far wall is rough-hewn stone, damp with age. "
+                    "An iron lever protrudes from the rock, crusted with old rust. "
+                    "A counterweight mechanism behind it suggests it controls "
+                    "something elsewhere in the house."
+                ),
+                "requires_light": True,
+            },
+            location="cellar"
+        ),
         # The oil lamp needs fuel before it can be lit.
         # States: fuelled=False/lit=False -> fuelled=True/lit=False -> lit=True
         "oil_lamp": Entity(
@@ -408,6 +465,26 @@ def build_demo_world() -> World:
                 "requires_light": True,  # only visible with lit lamp
             },
             location="cellar"
+        ),
+        # A folded letter inside the display case — found alongside the ring.
+        # It hints at the stone basin and the significance of the serpent ring,
+        # giving the player a clue for Puzzle 3 before they reach the study.
+        "folded_letter": Entity(
+            eid="folded_letter",
+            name="a folded letter",
+            aliases=["letter", "folded letter", "note", "paper", "folded note"],
+            tags={"portable", "readable"},
+            props={
+                "desc": "A sheet of paper folded into thirds, slightly yellowed.",
+                "readable_text": (
+                    "The note is written in a precise, careful hand:\n\n"
+                    "\"The ring must be worn when the basin is fed. Water alone "
+                    "will not wake it — the serpents must recognise their bearer. "
+                    "The study above the trophy room is where the old work was done. "
+                    "Wear the ring. Bring water. The rest will follow.\""
+                ),
+            },
+            location="display_case"
         ),
         # The silver ring is the reward from Puzzle 2 (inside display_case).
         # Must be WORN before pouring water into the basin for Puzzle 3.

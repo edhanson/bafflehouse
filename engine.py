@@ -99,9 +99,20 @@ def do_look(world: World) -> str:
 
     Uses visible_entities_for_room() so that dark-cellar items are correctly
     hidden when the lamp is unlit.
+
+    For rooms that have a desc_lit attribute (currently only the cellar),
+    the lit description is used when the player has a lit lamp, so the
+    room text and visible entity list are always consistent with each other.
     """
     room = world.room()
-    lines = [room.title, room.desc]
+
+    # Select dynamic description if available.
+    if hasattr(room, "desc_lit") and player_has_lit_lamp(world):
+        desc = room.desc_lit
+    else:
+        desc = room.desc
+
+    lines = [room.title, desc]
 
     visible = visible_entities_for_room(world)
 
@@ -187,8 +198,18 @@ def require_visible(world: World, eid: str) -> Optional[str]:
     Return an error message if eid is not currently visible, else None.
 
     Uses visible_entities_for_room() so the dark-cellar filter is respected.
+    When in the cellar without a lit lamp, entities that require light
+    return a darkness-specific message instead of the generic "not here".
     """
     if eid not in visible_entities_for_room(world):
+        # Give a more atmospheric message for light-gated entities in the cellar.
+        if (
+            world.player.location == "cellar"
+            and eid in world.entities
+            and world.entity(eid).props.get("requires_light", False)
+            and not player_has_lit_lamp(world)
+        ):
+            return "It's too dark to make anything out at that end of the room."
         return "You don't see that here."
     return None
 
@@ -344,6 +365,16 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     if "wearable" in ent.tags:
         if ent.props.get("worn", False):
             lines.append("You are wearing it.")
+
+    # Report remaining matches for fire sources.
+    if "fire_source" in ent.tags:
+        n = ent.props.get("matches_remaining", 0)
+        if n == 0:
+            lines.append("The box is empty. No matches remain.")
+        elif n == 1:
+            lines.append("One match remains.")
+        else:
+            lines.append(f"{n} matches remain.")
 
     return "\n".join(lines), True
 
@@ -601,13 +632,33 @@ def handle_read(world: World, ir: dict) -> Tuple[str, bool]:
     return text, True
 
 
+def _find_fire_source(world: World) -> Optional[str]:
+    """
+    Return the eid of a usable fire source in inventory, or None.
+
+    A fire source is any entity tagged "fire_source" with
+    props["matches_remaining"] > 0.  Written generically so future
+    fire sources work automatically if given the same tag.
+    """
+    for eid in world.player.inventory:
+        ent = world.entity(eid)
+        if "fire_source" in ent.tags and ent.props.get("matches_remaining", 0) > 0:
+            return eid
+    return None
+
+
 def handle_light(world: World, ir: dict) -> Tuple[str, bool]:
     """
-    Light a 'lightable'-tagged entity.
+    Light a lightable entity.
 
     Prerequisites:
-      - Entity must be in inventory (you can't light something at arm's length).
-      - Entity must have "fuelled": True.
+      - Entity must be in inventory.
+      - Entity must have fuelled: True.
+      - Player must carry a fire source (matchbox with matches remaining).
+
+    Using the matchbox decrements matches_remaining by one.  When the
+    count reaches zero the box is spent and lighting fails until a new
+    fire source is found.
     """
     obj = ir.get("obj")
 
@@ -627,12 +678,41 @@ def handle_light(world: World, ir: dict) -> Tuple[str, bool]:
     if not ent.props.get("fuelled", False):
         return "It has no fuel. You'll need to fill it with oil first.", False
 
+    # Require a fire source before allowing the light action.
+    fire_eid = _find_fire_source(world)
+    if fire_eid is None:
+        has_spent = any(
+            "fire_source" in world.entity(e).tags
+            for e in world.player.inventory
+        )
+        if has_spent:
+            return (
+                "You open the matchbox — it's empty. "
+                "There are no matches left."
+            ), False
+        return (
+            "You need something to light it with. "
+            "A fire source of some kind would help."
+        ), False
+
+    # Consume one match.
+    fire_ent = world.entity(fire_eid)
+    fire_ent.props["matches_remaining"] -= 1
+    remaining = fire_ent.props["matches_remaining"]
+
     ent.props["lit"] = True
-    world.note_ref([obj])
-    return (
-        "You strike a spark. The lamp catches with a warm, steady flame, "
+    world.note_ref([obj, fire_eid])
+
+    msg = (
+        "You strike a match. The lamp catches with a warm, steady flame, "
         "pushing the darkness back."
-    ), True
+    )
+    if remaining == 0:
+        msg += " That was your last match."
+    elif remaining <= 3:
+        plural = "es" if remaining != 1 else ""
+        msg += f" Only {remaining} match{plural} left."
+    return msg, True
 
 
 def handle_extinguish(world: World, ir: dict) -> Tuple[str, bool]:

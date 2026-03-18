@@ -514,6 +514,14 @@ def rewrite_interaction_idioms(text: str) -> str:
         # USE / APPLY as generic combiner
         (r"^apply\s+(.+)\s+to\s+(.+)$",         r"use \1 with \2"),
         (r"^use\s+(.+)\s+on\s+(.+)$",           r"use \1 with \2"),
+
+        # LIGHT: strip trailing "with <fire-source>" phrasing.
+        # "light lamp with matches" / "light lamp with a match" should
+        # behave identically to "light lamp" — the fire source is found
+        # automatically from inventory by handle_light in engine.py.
+        (r"^light\s+(.+?)\s+with\s+\S.*$",     r"light \1"),
+        (r"^ignite\s+(.+?)\s+with\s+\S.*$",    r"light \1"),
+        (r"^kindle\s+(.+?)\s+with\s+\S.*$",    r"light \1"),
     ]
 
     for pattern, replacement in rewrites:
