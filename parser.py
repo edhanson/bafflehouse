@@ -174,7 +174,7 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
     # LIGHT — sets "lit": True on a "lightable" entity (requires "fuelled": True).
     "light": VerbDefinition(
         verb_id="light",
-        literal_forms=["light", "ignite", "kindle", "illuminate", "turn on"],
+        literal_forms=["light", "ignite", "kindle", "illuminate", "turn on", "strike"],
         semantic_examples=[
             "light a candle",
             "light a lamp",
@@ -511,6 +511,14 @@ def rewrite_interaction_idioms(text: str) -> str:
         (r"^take\s+off\s+(.+)$",                r"remove \1"),
         (r"^slip\s+off\s+(.+)$",                r"remove \1"),
         (r"^slip\s+(.+)\s+off$",                r"remove \1"),
+        # MATCH-SPECIFIC rewrites: route "strike/light a match" to the matchbox.
+        # This allows the player to strike matches as a standalone action
+        # without specifying what they intend to light.
+        (r"^strike\s+a?\s*match(?:es)?$",          r"light matchbox"),
+        (r"^light\s+a?\s*match(?:es)?$",           r"light matchbox"),
+        (r"^ignite\s+a?\s*match(?:es)?$",          r"light matchbox"),
+        (r"^strike\s+a?\s*match(?:es)?\s+(.+)$",  r"light matchbox"),
+
         # USE / APPLY as generic combiner
         (r"^apply\s+(.+)\s+to\s+(.+)$",         r"use \1 with \2"),
         (r"^use\s+(.+)\s+on\s+(.+)$",           r"use \1 with \2"),

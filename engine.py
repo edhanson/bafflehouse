@@ -402,7 +402,13 @@ def handle_take(world: World, ir: dict) -> Tuple[str, bool]:
 
     move_entity(world, obj, "player")
     world.note_ref([obj])
-    return narrate(["Taken.", "Okay.", "You take it."]), True
+    # Name the item explicitly to avoid pronoun-number ambiguity
+    # ("You take them." vs "You take it." for plural-sounding names).
+    return narrate([
+        f"You take {ent.name}.",
+        f"Taken.",
+        f"You pick up {ent.name}.",
+    ]), True
 
 
 def handle_drop(world: World, ir: dict) -> Tuple[str, bool]:
@@ -670,6 +676,31 @@ def handle_light(world: World, ir: dict) -> Tuple[str, bool]:
         return "You'd need to be holding it to light it.", False
 
     ent = world.entity(obj)
+
+    # Special case: lighting/striking the matchbox itself.
+    # "light match", "strike match", "light matches" — the player is
+    # striking a match as a standalone action rather than to light
+    # something else.  Consume one match and describe the small flame.
+    if "fire_source" in ent.tags:
+        n = ent.props.get("matches_remaining", 0)
+        if n == 0:
+            return (
+                "You open the matchbox — it's empty. "
+                "There are no matches left to strike."
+            ), False
+        ent.props["matches_remaining"] -= 1
+        remaining = ent.props["matches_remaining"]
+        world.note_ref([obj])
+        msg = (
+            "You strike a match. A small flame gutters to life, casting "
+            "a modest circle of warm light. It won't last long on its own."
+        )
+        if remaining == 0:
+            msg += " That was your last match."
+        elif remaining <= 3:
+            plural = "es" if remaining != 1 else ""
+            msg += f" Only {remaining} match{plural} left."
+        return msg, True
 
     if "lightable" not in ent.tags:
         return "That's not something you can light.", False
