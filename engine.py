@@ -1316,7 +1316,12 @@ def process_input(
         # from the index when the lamp is unlit.
         parser_system.semantic_entity_index.rebuild_for_visible(world)
 
+        # Attach world temporarily so parse_to_candidates can pass it
+        # to semantic_slot_fill (Improvement B3) without changing the
+        # public API of parse_to_candidates.
+        parser_system._current_world = world
         candidates = parse_to_candidates(seg, parser_system=parser_system)
+        parser_system._current_world = None
 
         if not candidates:
             outputs.append("I beg your pardon?")
