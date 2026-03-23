@@ -1,5 +1,42 @@
+# ── Virtual environment ───────────────────────────────────────
 env/
+.venv/
+venv/
+
+# ── Project-specific ignored directories ─────────────────────
 deprecated_files/
-models/
-__pycache__
 OLD/
+
+# ── Embedding model (large, downloaded on demand) ────────────
+models/
+
+# ── NPC runtime state (player-specific, not versioned) ───────
+npc_memory.json
+combat_memory.json
+
+# ── Python bytecode and caches ────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Test and coverage artifacts ───────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+*.coveragerc
+
+# ── Distribution / packaging ──────────────────────────────────
+dist/
+build/
+*.egg-info/
+
+# ── Editor and OS files ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/

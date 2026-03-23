@@ -1,0 +1,17 @@
+# requirements.txt
+#
+# Runtime dependencies for the bafflehouse interactive fiction engine.
+#
+# Core game — no external dependencies beyond the standard library.
+# The game runs fully offline in symbolic-only mode without any of
+# the packages below.
+#
+# Semantic parser (optional — required for Section 7 tests and for
+# richer entity grounding in the running game):
+sentence-transformers>=2.2.0
+#
+# sentence-transformers pulls in torch, transformers, and huggingface_hub
+# automatically.  If you want a CPU-only torch build to save disk space:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install sentence-transformers
+ 

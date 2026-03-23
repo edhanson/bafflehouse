@@ -1,0 +1,142 @@
+# .github/workflows/ci.yml
+#
+# CI pipeline for the bafflehouse interactive fiction engine.
+#
+# TRIGGERS
+#   - Every push to main or any feature/* branch
+#   - Every pull request targeting main
+#
+# JOBS
+#   test-symbolic
+#     Runs the full test suite in symbolic-only mode (no embedding model).
+#     Fast (~30 s), no large downloads, always runs.
+#     Sections covered: world, doors, cellar, puzzles, verbs, parser,
+#                       improvement_b (123 tests).
+#     Section 7 (improvement_a) is skipped because it requires the
+#     sentence-transformers model.
+#
+#   test-semantic  [optional, manual trigger or weekly schedule]
+#     Downloads the embedding model and runs the full suite including
+#     Section 7.  Slower (~3-5 min including download), runs on a
+#     separate job so it does not block PRs.
+
+name: Test suite
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Run the semantic job every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      run_semantic:
+        description: "Run semantic tests (downloads ~80 MB model)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
+
+jobs:
+  # ──────────────────────────────────────────────────────────
+  # Job 1: symbolic tests — always runs, fast
+  # ──────────────────────────────────────────────────────────
+  test-symbolic:
+    name: "Test suite (symbolic)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Pin to the same minor version you develop against.
+          # Update this when you upgrade locally.
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run symbolic test suite
+        run: |
+          python test_suite.py
+        # The suite exits 0 on pass, 1 on any failure.
+        # The final stdout line is:
+        #   RESULT: <passed>/<total> [semantic=off]
+        # which GitHub captures in the step log.
+
+      - name: Report result
+        if: always()
+        run: |
+          echo "### Test results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          # Pull the RESULT line from the test output and echo it
+          python test_suite.py 2>&1 | grep "^RESULT:" >> $GITHUB_STEP_SUMMARY || true
+
+  # ──────────────────────────────────────────────────────────
+  # Job 2: semantic tests — scheduled weekly or manual trigger
+  # ──────────────────────────────────────────────────────────
+  test-semantic:
+    name: "Test suite (semantic)"
+    runs-on: ubuntu-latest
+
+    # Only run on the weekly schedule, a manual dispatch requesting it,
+    # or pushes to main (not PRs — keeps PR feedback fast).
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_semantic == 'true') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Cache the model so weekly runs don't re-download 80 MB each time.
+      # The cache key includes the model name; change it if you switch models.
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        id: model-cache
+        with:
+          path: ./models
+          key: embedding-model-all-MiniLM-L6-v2-v1
+
+      - name: Download embedding model
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: |
+          python download_local_model.py
+
+      - name: Verify embedding model
+        run: |
+          python verify_local_model.py
+
+      - name: Run full test suite (including semantic section)
+        run: |
+          python test_suite.py --semantic
+
+      - name: Report result
+        if: always()
+        run: |
+          echo "### Test results (semantic)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          python test_suite.py --semantic 2>&1 | grep "^RESULT:" >> $GITHUB_STEP_SUMMARY || true
