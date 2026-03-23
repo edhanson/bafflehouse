@@ -402,12 +402,14 @@ def handle_take(world: World, ir: dict) -> Tuple[str, bool]:
 
     move_entity(world, obj, "player")
     world.note_ref([obj])
-    # Name the item explicitly to avoid pronoun-number ambiguity
-    # ("You take them." vs "You take it." for plural-sounding names).
+    # All responses name the item explicitly to avoid pronoun-number
+    # ambiguity ("You take them." vs "You take it." for plural-sounding
+    # names like "a box of matches").  "Taken." is intentionally omitted
+    # from the pool since it uses no name and cannot be tested reliably.
     return narrate([
         f"You take {ent.name}.",
-        f"Taken.",
         f"You pick up {ent.name}.",
+        f"You grab {ent.name}.",
     ]), True
 
 
