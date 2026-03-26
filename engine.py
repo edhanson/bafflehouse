@@ -394,6 +394,10 @@ def handle_take(world: World, ir: dict) -> Tuple[str, bool]:
 
     ent = world.entity(obj)
 
+    if "mounted" in ent.tags:
+        return (
+            f"You'll need to take {ent.name} down from the wall first."
+        ), False
     if "portable" not in ent.tags or "scenery" in ent.tags:
         return "You can't take that.", False
 
@@ -468,15 +472,15 @@ def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
     # This means unlock + open is always required to gain passage, which
     # is consistent between the oak door and the study door.
     if obj == "oak_door":
-        world.rooms["foyer"].exits["north"] = "hall"
-        world.rooms["hall"].exits["south"] = "foyer"
+        world.rooms["foyer"].exits["north"] = "hall_1"
+        world.rooms["hall_1"].exits["south"] = "foyer"
         return "The oak door swings open, revealing the hall beyond.", True
 
     if obj == "study_door":
-        world.rooms["trophy_room"].exits["north"] = "secret_study"
-        world.rooms["secret_study"].exits["south"] = "trophy_room"
+        world.rooms["trophy_room"].exits["south"] = "secret_study"
+        world.rooms["secret_study"].exits["north"] = "trophy_room"
         return (
-            "The heavy door swings inward, revealing a dark passage to the north."
+            "The heavy door swings inward, revealing a passage to the south."
         ), True
 
     return narrate(["Opened.", "The thing opens.", "With a modest show of cooperation, it opens."]), True
@@ -510,12 +514,12 @@ def handle_close(world: World, ir: dict) -> Tuple[str, bool]:
     # Mirror of handle_open: closing a door removes the compass exits.
     if obj == "oak_door":
         world.rooms["foyer"].exits.pop("north", None)
-        world.rooms["hall"].exits.pop("south", None)
+        world.rooms["hall_1"].exits.pop("south", None)
         return "The oak door swings shut with a heavy thud.", True
 
     if obj == "study_door":
-        world.rooms["trophy_room"].exits.pop("north", None)
-        world.rooms["secret_study"].exits.pop("south", None)
+        world.rooms["trophy_room"].exits.pop("south", None)
+        world.rooms["secret_study"].exits.pop("north", None)
         return "The heavy door grinds shut behind you.", True
 
     return narrate(["Closed.", "The thing closes."]), True
@@ -860,7 +864,7 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
         # Open the passage: add "west" exit to the hall, and a reciprocal
         # "east" exit would lead back to the cellar top, but we instead route
         # it back to the cellar for simplicity (the foyer route still works).
-        world.rooms["hall"].exits["west"] = "cellar"
+        world.rooms["hall_3"].exits["north"] = "cellar"
         world.note_ref([obj])
 
         return (
@@ -1199,6 +1203,45 @@ def handle_use(world: World, ir: dict) -> Tuple[str, bool]:
     ), False
 
 
+def handle_unmount(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Take down a mounted item (weapon or armour) from the wall.
+
+    Items tagged "mounted" cannot be picked up with TAKE — the player must
+    use TAKE DOWN, REMOVE FROM MOUNT, or UNMOUNT to free them first.  Once
+    unmounted the "mounted" tag is removed and the item becomes portable,
+    so a subsequent TAKE command works normally.
+
+    The player does not automatically receive the item; they must pick it
+    up separately after unmounting.  This mirrors the physical reality of
+    lifting something off a wall hook and setting it down.
+    """
+    obj = ir.get("obj")
+
+    if not obj:
+        return "Take down what?", False
+    if obj not in world.entities:
+        return "You don't see that here.", False
+
+    err = require_visible(world, obj)
+    if err:
+        return err, False
+
+    ent = world.entity(obj)
+
+    if "mounted" not in ent.tags:
+        return "That isn't mounted on anything.", False
+
+    # Remove the mounted tag and add portable so TAKE now works.
+    ent.tags.discard("mounted")
+    ent.tags.add("portable")
+    world.note_ref([obj])
+
+    return (
+        f"You lift {ent.name} down from the wall and set it on the floor."
+    ), True
+
+
 # ============================================================
 # Handler dispatch table
 # ============================================================
@@ -1225,6 +1268,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "wear":       handle_wear,
     "remove":     handle_remove,
     "use":        handle_use,
+    "unmount":    handle_unmount,
 }
 
 

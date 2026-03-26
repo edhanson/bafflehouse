@@ -1,6 +1,6 @@
 # content.py
 #
-# World definition for the manor interactive fiction game.
+# World definition for the bafflehouse interactive fiction game.
 #
 # This file is the single authoritative source for all rooms, entities, and
 # the starting player state.  The engine and parser never hard-code world
@@ -57,24 +57,50 @@ def build_demo_world() -> World:
             desc=(
                 "You are standing in a small foyer. A dusty chandelier sulks overhead. "
                 "A heavy oak door to the north stands between you and the rest of the manor. "
-                "A narrow staircase descends to the west."
+                "A narrow staircase descends to the west. To the south, the manor's "
+                "front entrance opens onto what appears to be an overgrown garden."
             ),
-            exits={"west": "cellar"}  # "north" is added dynamically when the oak door is opened
+            exits={"west": "cellar", "south": "entryway"}
+            # NOTE: "north" is added dynamically when the oak door is opened.
         ),
-        "hall": Room(
-            rid="hall",
-            title="Hall",
+        # The original single hall is now three sections running north-south.
+        # hall_1 is the southernmost (adjacent to the foyer oak door).
+        # hall_2 is the middle section.
+        # hall_3 is the northernmost (trophy room west, cellar passage north).
+        "hall_1": Room(
+            rid="hall_1",
+            title="South Hall",
             desc=(
-                "A long hall stretches into gloom. Stone walls are hung with faded "
+                "A long hall runs northward into shadow. Stone walls are hung with faded "
                 "hunting portraits. The oak door to the south leads back toward the foyer. "
-                "Exits also lead east into what looks like a library and north toward a trophy room. "
                 "A dusty side table near the door holds what appears to be a journal. "
-                "A section of the west wall looks subtly different from the rest — "
+                "The hall continues north."
+            ),
+            exits={"east": "library", "north": "hall_2"}
+            # NOTE: "south" added dynamically when oak door is opened.
+        ),
+        "hall_2": Room(
+            rid="hall_2",
+            title="Central Hall",
+            desc=(
+                "The central stretch of the manor hall. Portraits of stern-faced ancestors "
+                "line the walls, their painted eyes tracking you with practised disapproval. "
+                "The hall continues north and south."
+            ),
+            exits={"north": "hall_3", "south": "hall_1"}
+        ),
+        "hall_3": Room(
+            rid="hall_3",
+            title="North Hall",
+            desc=(
+                "The northernmost reach of the hall. The air here is colder and the "
+                "portraits have given way to mounted weapons and shields. A heavy door "
+                "to the west leads into what looks like a trophy room. "
+                "A section of the north wall looks subtly different from the rest — "
                 "the stonework is newer, as if something was once bricked over."
             ),
-            exits={"east": "library", "north": "trophy_room"}
-            # NOTE: "south" is added dynamically when the oak door is opened.
-            # NOTE: "west" is added dynamically by the lever puzzle in handle_pull.
+            exits={"south": "hall_2", "west": "trophy_room"}
+            # NOTE: "north" to cellar passage added dynamically by lever puzzle.
         ),
 
         # --- New rooms ---
@@ -88,21 +114,20 @@ def build_demo_world() -> World:
                 "A locked glass display case stands against the far wall. "
                 "The hall lies to the west."
             ),
-            exits={"west": "hall"}
+            exits={"west": "hall_1"}
         ),
         "trophy_room": Room(
             rid="trophy_room",
             title="Trophy Room",
             desc=(
-                "Animal heads and antique weapons cover every wall. In the centre of "
-                "the room stands a large stone sculpture of a stag. Its proportions are "
-                "slightly wrong — one antler looks heavier than the other, as if it were "
-                "added later. A door to the north is fitted with an iron lock. "
-                "The hall is south."
+                "A broad chamber lined with trophies of past hunts and battles. Mounted "
+                "weapons and pieces of armour hang on every wall alongside the animal "
+                "heads. In the centre stands a large stone stag, one antler conspicuously "
+                "heavier than the other. A door to the south is fitted with an iron lock. "
+                "The north hall is to the east."
             ),
-            exits={"south": "hall"}
-            # NOTE: The "north" exit to the secret study is added dynamically
-            # by handle_unlock when the iron key is used on the study door.
+            exits={"east": "hall_3"}
+            # NOTE: "south" to secret study added dynamically by handle_open(study_door).
         ),
         "secret_study": Room(
             rid="secret_study",
@@ -111,9 +136,45 @@ def build_demo_world() -> World:
                 "A small, airless room. Shelves of leather-bound ledgers line the walls. "
                 "In the centre, a shallow stone basin sits on a plinth. "
                 "The basin is carved with intertwined serpents and looks very old. "
-                "The door back south leads to the trophy room."
+                "The door back north leads to the trophy room."
             ),
-            exits={"south": "trophy_room"}
+            exits={"north": "trophy_room"}
+        ),
+        "entryway": Room(
+            rid="entryway",
+            title="Overgrown Garden",
+            desc=(
+                "The manor's former approach garden, now entirely reclaimed by nature. "
+                "Flagstones heave under pressure from roots; ornamental hedges have "
+                "become formless walls of dark green. A rusted iron gate to the west "
+                "leads toward a wooded path. To the east, the old gatehouse is just "
+                "visible through the overgrowth. The manor entrance is back to the north."
+            ),
+            exits={"north": "foyer", "east": "gatehouse", "west": "wooded_path"}
+        ),
+        "gatehouse": Room(
+            rid="gatehouse",
+            title="Gatehouse",
+            desc=(
+                "The old gatehouse straddles what was once the main carriage road. Its "
+                "portcullis has long since rusted open, the road beyond it disappearing "
+                "into trees. Whatever traffic once passed through here has not done so "
+                "in a very long time. The garden lies to the west."
+            ),
+            exits={"west": "entryway"}
+            # NOTE: Future expansion — east exit leads away from the manor.
+        ),
+        "wooded_path": Room(
+            rid="wooded_path",
+            title="Wooded Path",
+            desc=(
+                "A narrow path winds into dense woodland. The trees press close on both "
+                "sides, their branches interlocking overhead. The path continues west "
+                "into deepening shadow. Behind you to the east, the overgrown garden "
+                "is still visible."
+            ),
+            exits={"east": "entryway"}
+            # NOTE: Future expansion — west exit leads further into the woods.
         ),
         "cellar": Room(
             rid="cellar",
@@ -234,7 +295,7 @@ def build_demo_world() -> World:
                 "open": False,
                 "locked": True,
                 "key_id": 1,
-                "room_a": "hall",
+                "room_a": "hall_1",
                 "room_b": "foyer"
             },
             location="hall"
@@ -281,12 +342,120 @@ def build_demo_world() -> World:
                     "where it rests. A firm pull on the heavy antler will remind him.\""
                 ),
             },
-            location="hall"
+            location="hall_1"
         ),
 
         # ======================================================
         # TROPHY ROOM entities  (Puzzle 2 clue + Puzzle 3 gate)
         # ======================================================
+
+        # ── Weapons and armour ───────────────────────────────────────────
+        # All are tagged "mounted" — they require TAKE DOWN / REMOVE FROM
+        # MOUNT before becoming portable.  Stat props (damage, defense) are
+        # included now so the combat system can read them without needing a
+        # content update later.
+
+        "broadsword": Entity(
+            eid="broadsword",
+            name="a broadsword",
+            aliases=["sword", "broadsword", "blade", "long sword", "longsword"],
+            tags={"mounted", "weapon"},
+            props={
+                "desc": (
+                    "A broad-bladed sword, the steel dulled with age but the edge "
+                    "still serviceable. A faded crest is etched into the forte."
+                ),
+                "damage": 4,
+                "damage_type": "slash",
+                "two_handed": False,
+                "weight": "heavy",
+            },
+            location="trophy_room"
+        ),
+        "hunting_knife": Entity(
+            eid="hunting_knife",
+            name="a hunting knife",
+            aliases=["knife", "hunting knife", "dagger", "short blade"],
+            tags={"mounted", "weapon"},
+            props={
+                "desc": (
+                    "A long hunting knife with a bone handle, well-balanced and "
+                    "light enough to throw. The blade curves slightly toward the tip."
+                ),
+                "damage": 2,
+                "damage_type": "pierce",
+                "two_handed": False,
+                "weight": "light",
+                "throwable": True,
+            },
+            location="trophy_room"
+        ),
+        "iron_mace": Entity(
+            eid="iron_mace",
+            name="an iron mace",
+            aliases=["mace", "iron mace", "club", "bludgeon"],
+            tags={"mounted", "weapon"},
+            props={
+                "desc": (
+                    "A flanged iron mace, heavy and unsubtle. The haft is wrapped "
+                    "in cracked leather. It looks like it has seen genuine use."
+                ),
+                "damage": 5,
+                "damage_type": "blunt",
+                "two_handed": False,
+                "weight": "heavy",
+            },
+            location="trophy_room"
+        ),
+        "kite_shield": Entity(
+            eid="kite_shield",
+            name="a kite shield",
+            aliases=["shield", "kite shield", "buckler"],
+            tags={"mounted", "armor", "wearable"},
+            props={
+                "desc": (
+                    "A kite-shaped shield of banded iron over oak. The painted device "
+                    "on its face has faded to an unreadable smear. Still solid."
+                ),
+                "defense": 3,
+                "defense_type": "physical",
+                "two_handed": False,
+                "weight": "medium",
+                "worn": False,
+            },
+            location="trophy_room"
+        ),
+        "chain_coif": Entity(
+            eid="chain_coif",
+            name="a chain coif",
+            aliases=["coif", "chain coif", "mail coif", "chainmail hood", "hood"],
+            tags={"mounted", "armor", "wearable"},
+            props={
+                "desc": (
+                    "A hood of riveted chainmail protecting head and neck. Heavy, "
+                    "but it would still turn a glancing blow."
+                ),
+                "defense": 2,
+                "defense_type": "physical",
+                "weight": "medium",
+                "worn": False,
+            },
+            location="trophy_room"
+        ),
+        "weapon_rack": Entity(
+            eid="weapon_rack",
+            name="the weapon rack",
+            aliases=["rack", "weapon rack", "mount", "wall mount", "display"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "A heavy iron rack bolted to the stone wall, holding an assortment "
+                    "of weapons and armour. Each item hangs on pegs or hooks. "
+                    "They look old but not entirely decorative."
+                ),
+            },
+            location="trophy_room"
+        ),
 
         # The stone stag is scenery — cannot be taken.
         # "antler" aliases are added after the dict so we can reference it cleanly.
@@ -334,6 +503,7 @@ def build_demo_world() -> World:
                 "open": False,
                 "locked": True,
                 "key_id": 2,
+                # study_door: room_a is trophy_room (north), room_b is secret_study (south)
                 "room_a": "trophy_room",
                 "room_b": "secret_study"
             },

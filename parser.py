@@ -300,6 +300,20 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         shape="verb_obj_prep_iobj",
         preferred_preps=["with", "on", "in", "into"],
     ),
+
+    # UNMOUNT — take a mounted weapon or armour piece off the wall.
+    # Separate from TAKE so mounted items have a distinct first interaction.
+    "unmount": VerbDefinition(
+        verb_id="unmount",
+        literal_forms=["unmount", "take down", "detach"],
+        semantic_examples=[
+            "take something off the wall",
+            "remove a weapon from its mount",
+            "unhook something from the wall",
+            "lift a sword off the rack",
+        ],
+        shape="verb_obj",
+    ),
 }
 
 
@@ -518,6 +532,14 @@ def rewrite_interaction_idioms(text: str) -> str:
         (r"^light\s+a?\s*match(?:es)?$",           r"light matchbox"),
         (r"^ignite\s+a?\s*match(?:es)?$",          r"light matchbox"),
         (r"^strike\s+a?\s*match(?:es)?\s+(.+)$",  r"light matchbox"),
+
+        # UNMOUNT idioms — all route to "unmount <obj>"
+        (r"^take\s+down\s+(.+)$",                       r"unmount \1"),
+        (r"^remove\s+(.+)\s+from\s+(the\s+)?wall$",   r"unmount \1"),
+        (r"^remove\s+(.+)\s+from\s+(the\s+)?mount$",  r"unmount \1"),
+        (r"^remove\s+(.+)\s+from\s+(the\s+)?rack$",   r"unmount \1"),
+        (r"^lift\s+(.+)\s+off\s+(the\s+)?wall$",      r"unmount \1"),
+        (r"^unhook\s+(.+)$",                              r"unmount \1"),
 
         # USE / APPLY as generic combiner
         (r"^apply\s+(.+)\s+to\s+(.+)$",         r"use \1 with \2"),
@@ -902,6 +924,10 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "utilize":     "use",
     "wield":       "use",
     "brandish":    "use",
+    # unmount-family
+    "unstrap":     "unmount",
+    "unbuckle":    "unmount",
+    "pry off":     "unmount",
 
     # pour-family
     "decant":      "pour",

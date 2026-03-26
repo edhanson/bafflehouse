@@ -170,8 +170,8 @@ def test_world_structure() -> Suite:
     s = Suite("SECTION 1 — World structure")
     w = fresh()
 
-    for rid in ("foyer", "hall", "library", "trophy_room",
-                "secret_study", "cellar"):
+    for rid in ("foyer", "hall_1", "hall_2", "hall_3", "library", "trophy_room",
+                "secret_study", "cellar", "entryway", "gatehouse", "wooded_path"):
         s.check(f"room '{rid}' exists", rid in w.rooms)
 
     s.check("display_key starts hidden",
@@ -179,12 +179,12 @@ def test_world_structure() -> Suite:
     s.check("ancient_scroll starts hidden",
             w.entities["ancient_scroll"].location == "hidden")
 
-    s.check("journal location is hall",
-            w.entities["journal"].location == "hall")
+    s.check("journal location is hall_1",
+            w.entities["journal"].location == "hall_1")
     s.check("matchbox inside wooden_box",
             "matchbox" in w.entities["wooden_box"].contains)
-    s.check("journal in hall.entities",
-            "journal" in w.rooms["hall"].entities)
+    s.check("journal in hall_1.entities",
+            "journal" in w.rooms["hall_1"].entities)
     s.check("silver_ring inside display_case",
             "silver_ring" in w.entities["display_case"].contains)
     s.check("folded_letter inside display_case",
@@ -194,8 +194,8 @@ def test_world_structure() -> Suite:
 
     s.check("foyer has no north exit at start",
             "north" not in w.rooms["foyer"].exits)
-    s.check("hall has no south exit at start",
-            "south" not in w.rooms["hall"].exits)
+    s.check("hall_1 has no south exit at start",
+            "south" not in w.rooms["hall_1"].exits)
     s.check("trophy_room has no north exit at start",
             "north" not in w.rooms["trophy_room"].exits)
     s.check("cellar has east exit",
@@ -240,22 +240,22 @@ def test_door_mechanics() -> Suite:
     cmd(w, "unlock door with brass key")
     cmd(w, "open door")
     cmd(w, "go north")
-    s.check("oak: passage after unlock + open", w.player.location == "hall")
+    s.check("oak: passage after unlock + open", w.player.location == "hall_1")
 
     cmd(w, "close door")
     cmd(w, "go south")
-    s.check("oak: blocked after close", w.player.location == "hall")
+    s.check("oak: blocked after close", w.player.location == "hall_1")
 
     # Study door (trophy_room <-> secret_study)
     w = door_world("trophy_room")
-    cmd(w, "go north")
+    cmd(w, "go south")
     s.check("study: blocked before unlock",
             w.player.location == "trophy_room")
 
     w = door_world("trophy_room")
     move_entity(w, "iron_key", "player")
     cmd(w, "unlock door with iron key")
-    cmd(w, "go north")
+    cmd(w, "go south")
     s.check("study: blocked after unlock but before open",
             w.player.location == "trophy_room")
 
@@ -263,29 +263,29 @@ def test_door_mechanics() -> Suite:
     move_entity(w, "iron_key", "player")
     cmd(w, "unlock door with iron key")
     cmd(w, "open door")
-    cmd(w, "go north")
+    cmd(w, "go south")
     s.check("study: passage after unlock + open",
             w.player.location == "secret_study")
 
-    cmd(w, "go south")
-    s.check("study: return south through open door",
+    cmd(w, "go north")
+    s.check("study: return north through open door",
             w.player.location == "trophy_room")
 
-    cmd(w, "go north")
-    cmd(w, "close door")
     cmd(w, "go south")
+    cmd(w, "close door")
+    cmd(w, "go north")
     s.check("study: blocked after close",
             w.player.location == "secret_study")
 
     w2 = fresh()
     s.check("foyer north absent at start",
             "north" not in w2.rooms["foyer"].exits)
-    s.check("hall south absent at start",
-            "south" not in w2.rooms["hall"].exits)
-    s.check("trophy_room north absent at start",
-            "north" not in w2.rooms["trophy_room"].exits)
-    s.check("secret_study south always present",
-            "south" in w2.rooms["secret_study"].exits)
+    s.check("hall_1 south absent at start",
+            "south" not in w2.rooms["hall_1"].exits)
+    s.check("trophy_room south absent at start",
+            "south" not in w2.rooms["trophy_room"].exits)
+    s.check("secret_study north always present",
+            "north" in w2.rooms["secret_study"].exits)
 
     return s
 
@@ -373,8 +373,8 @@ def test_puzzles() -> Suite:
     cmd(w, "unlock door with brass key")
     cmd(w, "open door")
     cmd(w, "go north")
-    s.check("puzzle 0: reach hall via oak door",
-            w.player.location == "hall")
+    s.check("puzzle 0: reach hall_1 via oak door",
+            w.player.location == "hall_1")
 
     # Puzzle 1: fill + light + pull lever
     w = fresh()
@@ -385,7 +385,7 @@ def test_puzzles() -> Suite:
 
     out, _ = cmd(w, "pull lever")
     s.check("puzzle 1: lever blocked without light",
-            w.rooms["hall"].exits.get("west") is None)
+            w.rooms["hall_3"].exits.get("north") is None)
 
     cmd(w, "fill lamp with oil")
     cmd(w, "light lamp")
@@ -395,12 +395,12 @@ def test_puzzles() -> Suite:
             w.entities["matchbox"].props["matches_remaining"] == 9)
 
     cmd(w, "pull lever")
-    s.check("puzzle 1: hall west passage opened",
-            w.rooms["hall"].exits.get("west") == "cellar")
+    s.check("puzzle 1: hall_3 north passage opened",
+            w.rooms["hall_3"].exits.get("north") == "cellar")
 
     # Puzzle 2: journal -> antler -> display key -> case
     w = fresh()
-    w.player.location = "hall"
+    w.player.location = "hall_1"
     out, _ = cmd(w, "read journal")
     s.check("puzzle 2: read journal gives antler clue",
             "antler" in out.lower() or "stag" in out.lower())
@@ -591,7 +591,7 @@ def test_verb_handlers() -> Suite:
 
     # Read
     w = fresh()
-    w.player.location = "hall"
+    w.player.location = "hall_1"
     out, _ = cmd(w, "read journal")
     s.check("read journal -> antler clue",
             "antler" in out.lower() or "stag" in out.lower(), out)
@@ -843,7 +843,7 @@ def test_parser_improvement_b() -> Suite:
             "oil_lamp" in w.player.inventory and p is None, out)
 
     w = fresh()
-    w.player.location = "hall"
+    w.player.location = "hall_1"
     out, p = cmd(w, "inspect the journal")
     s.check('B2: "inspect the journal" -> examines journal',
             p is None and (
@@ -878,6 +878,190 @@ def test_parser_improvement_b() -> Suite:
 
 
 # ============================================================
+# SECTION 9 — Map expansion and weapons  [symbolic]
+# ============================================================
+
+def test_map_expansion() -> Suite:
+    s = Suite("SECTION 9 — Map expansion and weapons")
+
+    w = fresh()
+
+    # ── New rooms exist ───────────────────────────────────────
+    for rid in ("hall_1", "hall_2", "hall_3", "entryway",
+                "gatehouse", "wooded_path"):
+        s.check(f"room '{rid}' exists", rid in w.rooms)
+    s.check("old 'hall' removed", "hall" not in w.rooms)
+
+    # ── Hall connectivity ─────────────────────────────────────
+    s.check("hall_1 north -> hall_2",
+            w.rooms["hall_1"].exits.get("north") == "hall_2")
+    s.check("hall_2 north -> hall_3",
+            w.rooms["hall_2"].exits.get("north") == "hall_3")
+    s.check("hall_3 west -> trophy_room",
+            w.rooms["hall_3"].exits.get("west") == "trophy_room")
+    s.check("hall_1 east -> library",
+            w.rooms["hall_1"].exits.get("east") == "library")
+    s.check("library west -> hall_1",
+            w.rooms["library"].exits.get("west") == "hall_1")
+
+    # ── Outdoor connectivity ──────────────────────────────────
+    s.check("foyer south -> entryway",
+            w.rooms["foyer"].exits.get("south") == "entryway")
+    s.check("entryway north -> foyer",
+            w.rooms["entryway"].exits.get("north") == "foyer")
+    s.check("entryway east -> gatehouse",
+            w.rooms["entryway"].exits.get("east") == "gatehouse")
+    s.check("entryway west -> wooded_path",
+            w.rooms["entryway"].exits.get("west") == "wooded_path")
+    s.check("gatehouse west -> entryway",
+            w.rooms["gatehouse"].exits.get("west") == "entryway")
+    s.check("wooded_path east -> entryway",
+            w.rooms["wooded_path"].exits.get("east") == "entryway")
+
+    # ── Study door now south of trophy room ───────────────────
+    s.check("trophy_room has no south exit at start",
+            "south" not in w.rooms["trophy_room"].exits)
+    s.check("secret_study north -> trophy_room",
+            w.rooms["secret_study"].exits.get("north") == "trophy_room")
+
+    # ── Navigation: foyer south -> entryway -> outdoor areas ──
+    w = fresh()
+    w.player.location = "foyer"
+    cmd(w, "go south")
+    s.check("walk foyer south -> entryway",
+            w.player.location == "entryway")
+    cmd(w, "go east")
+    s.check("walk entryway east -> gatehouse",
+            w.player.location == "gatehouse")
+    cmd(w, "go west")
+    cmd(w, "go west")
+    s.check("walk entryway west -> wooded_path",
+            w.player.location == "wooded_path")
+
+    # ── Full hall traversal (requires oak door) ───────────────
+    w = fresh()
+    w.player.location = "foyer"
+    move_entity(w, "brass_key", "player")
+    cmd(w, "unlock door with brass key")
+    cmd(w, "open door")
+    cmd(w, "go north")
+    s.check("oak door: foyer north -> hall_1",
+            w.player.location == "hall_1")
+    cmd(w, "go north")
+    s.check("hall_1 north -> hall_2",
+            w.player.location == "hall_2")
+    cmd(w, "go north")
+    s.check("hall_2 north -> hall_3",
+            w.player.location == "hall_3")
+    cmd(w, "go west")
+    s.check("hall_3 west -> trophy_room",
+            w.player.location == "trophy_room")
+
+    # ── Study door is now south of trophy room ────────────────
+    w = fresh()
+    w.player.location = "trophy_room"
+    move_entity(w, "iron_key", "player")
+    cmd(w, "unlock door with iron key")
+    cmd(w, "open door")
+    cmd(w, "go south")
+    s.check("study door: trophy_room south -> secret_study",
+            w.player.location == "secret_study")
+    cmd(w, "go north")
+    s.check("study door: secret_study north -> trophy_room",
+            w.player.location == "trophy_room")
+
+    # ── Lever opens hall_3 north ──────────────────────────────
+    w = fresh()
+    w.player.location = "cellar"
+    move_entity(w, "oil_lamp", "player")
+    move_entity(w, "lamp_oil", "player")
+    move_entity(w, "matchbox", "player")
+    cmd(w, "fill lamp with oil")
+    cmd(w, "light lamp")
+    cmd(w, "pull lever")
+    s.check("lever opens hall_3 north passage",
+            w.rooms["hall_3"].exits.get("north") == "cellar")
+
+    # ── Weapons and armor in trophy room ─────────────────────
+    w = fresh()
+    for eid in ("broadsword", "hunting_knife", "iron_mace",
+                "kite_shield", "chain_coif"):
+        s.check(f"{eid} starts in trophy_room",
+                w.entities[eid].location == "trophy_room")
+        s.check(f"{eid} starts mounted",
+                "mounted" in w.entities[eid].tags)
+
+    # Weapons have stat props
+    s.check("broadsword has damage prop",
+            w.entities["broadsword"].props.get("damage") == 4)
+    s.check("iron_mace has damage prop",
+            w.entities["iron_mace"].props.get("damage") == 5)
+    s.check("kite_shield has defense prop",
+            w.entities["kite_shield"].props.get("defense") == 3)
+    s.check("chain_coif has defense prop",
+            w.entities["chain_coif"].props.get("defense") == 2)
+
+    # ── Unmount mechanics ─────────────────────────────────────
+    w = fresh()
+    w.player.location = "trophy_room"
+    out, _ = cmd(w, "take broadsword")
+    s.check("take mounted item -> blocked",
+            "broadsword" not in w.player.inventory)
+    s.check("take blocked message mentions wall or take down",
+            "wall" in out.lower() or "take down" in out.lower(), out)
+
+    out, _ = cmd(w, "take down broadsword")
+    s.check("take down -> unmounts",
+            "mounted" not in w.entities["broadsword"].tags)
+    s.check("unmounted item stays in room",
+            w.entities["broadsword"].location == "trophy_room")
+    s.check("unmounted item is now portable",
+            "portable" in w.entities["broadsword"].tags)
+
+    out, _ = cmd(w, "take broadsword")
+    s.check("take after unmount -> inventory",
+            "broadsword" in w.player.inventory)
+
+    # Unmount synonyms
+    w = fresh()
+    w.player.location = "trophy_room"
+    cmd(w, "remove iron mace from wall")
+    s.check("remove from wall -> unmounts",
+            "mounted" not in w.entities["iron_mace"].tags)
+
+    w = fresh()
+    w.player.location = "trophy_room"
+    cmd(w, "unhook hunting knife")
+    s.check("unhook -> unmounts",
+            "mounted" not in w.entities["hunting_knife"].tags)
+
+    w = fresh()
+    w.player.location = "trophy_room"
+    cmd(w, "unmount kite shield")
+    s.check("unmount -> unmounts shield",
+            "mounted" not in w.entities["kite_shield"].tags)
+
+    # Unmount already-unmounted item
+    w = fresh()
+    w.player.location = "trophy_room"
+    cmd(w, "take down chain coif")
+    out, _ = cmd(w, "take down chain coif")
+    s.check("unmount already-unmounted -> not mounted message",
+            "mounted" not in out.lower() or "isn't" in out.lower(), out)
+
+    # Wearable armor can be worn after unmounting
+    w = fresh()
+    w.player.location = "trophy_room"
+    cmd(w, "take down kite shield")
+    cmd(w, "take kite shield")
+    out, _ = cmd(w, "wear shield")
+    s.check("wear kite shield after unmount",
+            w.entities["kite_shield"].props.get("worn"), out)
+
+    return s
+
+
+# ============================================================
 # Registry
 # ============================================================
 
@@ -895,6 +1079,7 @@ SECTIONS: dict[str, tuple[Callable, Set[str]]] = {
     "parser":        (test_parser_disambiguation, {"symbolic"}),
     "improvement_a": (test_parser_improvement_a,  {"semantic"}),
     "improvement_b": (test_parser_improvement_b,  {"symbolic"}),
+    "map_expansion": (test_map_expansion,          {"symbolic"}),
 }
 
 
