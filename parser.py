@@ -301,6 +301,19 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         preferred_preps=["with", "on", "in", "into"],
     ),
 
+    # WIELD — placeholder for future combat system.
+    # Tells the player to specify a target rather than routing to USE.
+    "wield": VerbDefinition(
+        verb_id="wield",
+        literal_forms=["wield", "brandish", "ready", "raise"],
+        semantic_examples=[
+            "wield a weapon",
+            "brandish a sword",
+            "ready your weapon",
+        ],
+        shape="verb_obj",
+    ),
+
     # UNMOUNT — take a mounted weapon or armour piece off the wall.
     # Separate from TAKE so mounted items have a distinct first interaction.
     "unmount": VerbDefinition(
@@ -922,8 +935,6 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "employ":      "use",
     "utilise":     "use",
     "utilize":     "use",
-    "wield":       "use",
-    "brandish":    "use",
     # unmount-family
     "unstrap":     "unmount",
     "unbuckle":    "unmount",

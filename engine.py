@@ -123,11 +123,13 @@ def do_look(world: World) -> str:
         and eid not in world.player.inventory
     ]
 
+    # Only list items when there is something portable present.
+    # Scenery is described by the room text; an empty list here would
+    # print "You see nothing of interest." even in a room full of
+    # interesting-but-fixed things, which misleads the player.
     if visible_non_scenery:
         things = ", ".join(world.entity(eid).name for eid in visible_non_scenery)
         lines.append(f"You see {things}.")
-    else:
-        lines.append("You see nothing of interest.")
 
     exits = ", ".join(sorted(room.exits.keys())) if room.exits else "none"
     lines.append(f"Exits: {exits}.")
@@ -328,8 +330,14 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     world.note_ref([obj])
 
     # For liquid-bearing containers, swap to the empty description once drained.
+    # For scenery with a state-dependent description (e.g. bricked_wall after
+    # the lever is pulled), check for desc_open when the relevant passage exists.
     if ent.props.get("empty", False) and "desc_empty" in ent.props:
         desc = ent.props["desc_empty"]
+    elif ("desc_open" in ent.props
+          and world.rooms.get(world.player.location, None) is not None
+          and world.rooms[world.player.location].exits.get("north") == "cellar"):
+        desc = ent.props["desc_open"]
     else:
         desc = ent.props.get("desc", "You see nothing special.")
     lines = [desc]
@@ -869,9 +877,10 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
 
         return (
             "You haul on the iron lever with both hands. Somewhere deep in the wall, "
-            "something heavy shifts. A low rumble travels through the stone — and from "
-            "far above, you hear the sound of a door grinding open."
-            "\n\nIt sounds like the passage in the hall's west wall has been unsealed."
+            "something heavy shifts. A low rumble travels through the stone, climbing "
+            "upward through the floor and into your boots. From somewhere above — "
+            "distant, muffled by the intervening rock — comes the groan of something "
+            "large moving that has not moved in a very long time."
         ), True
 
     # Generic pullable (future-proofing)
@@ -1129,10 +1138,16 @@ def handle_remove(world: World, ir: dict) -> Tuple[str, bool]:
         return "Remove what?", False
     if obj not in world.entities:
         return "You don't see that here.", False
-    if obj not in world.player.inventory:
-        return "You aren't carrying that.", False
 
     ent = world.entity(obj)
+
+    # If the target is mounted on the wall (not a worn item), redirect
+    # to unmount — "remove X" is natural for wall-mounted items.
+    if "mounted" in ent.tags:
+        return handle_unmount(world, ir)
+
+    if obj not in world.player.inventory:
+        return "You aren't carrying that.", False
 
     if "wearable" not in ent.tags:
         return "You can't remove that.", False
@@ -1242,6 +1257,34 @@ def handle_unmount(world: World, ir: dict) -> Tuple[str, bool]:
     ), True
 
 
+def handle_wield(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Wield a weapon — placeholder until the combat system is implemented.
+
+    The player has named a weapon but not a target.  Rather than routing
+    to handle_use (which produces nonsense) or silently failing, we ask
+    for the missing information.  When combat is added this handler will
+    either delegate to attack or set a "readied weapon" state.
+    """
+    obj = ir.get("obj")
+
+    if not obj:
+        return "Wield what?", False
+    if obj not in world.entities:
+        return "You don't see that here.", False
+    if obj not in world.player.inventory:
+        return "You'll need to be holding it first.", False
+
+    ent = world.entity(obj)
+
+    if "weapon" not in ent.tags:
+        return f"{ent.name.capitalize()} isn't a weapon.", False
+
+    return (
+        f"You raise {ent.name} — but there's nothing here to use it against."
+    ), False
+
+
 # ============================================================
 # Handler dispatch table
 # ============================================================
@@ -1269,6 +1312,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "remove":     handle_remove,
     "use":        handle_use,
     "unmount":    handle_unmount,
+    "wield":      handle_wield,
 }
 
 

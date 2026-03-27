@@ -283,13 +283,227 @@ def build_demo_world() -> World:
             location="foyer"
         ),
 
-        # The oak door connects hall <-> foyer.
+        # ── hall_1 scenery ────────────────────────────────────────────────
+        "hall_portraits_1": Entity(
+            eid="hall_portraits_1",
+            name="the hunting portraits",
+            aliases=["portraits", "hunting portraits", "paintings", "pictures",
+                     "portrait", "painting", "picture", "frames"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "Faded oil paintings of men and women on horseback, or standing "
+                    "over fallen stags with satisfied expressions. The paint has "
+                    "darkened with age and the subjects have become difficult to "
+                    "distinguish from one another. Whoever they were, they are "
+                    "long gone."
+                ),
+            },
+            location="hall_1"
+        ),
+        "side_table": Entity(
+            eid="side_table",
+            name="the side table",
+            aliases=["side table", "table", "dusty table", "small table"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "A narrow side table pushed against the wall near the south door. "
+                    "Its surface is thick with dust. The journal rests on top of it."
+                ),
+            },
+            location="hall_1"
+        ),
+
+        # ── hall_2 scenery ────────────────────────────────────────────────
+        "hall_portraits_2": Entity(
+            eid="hall_portraits_2",
+            name="the portraits",
+            aliases=["portraits", "paintings", "pictures", "ancestors",
+                     "portrait", "painting", "picture", "stern faces",
+                     "stern-faced portraits", "ancestor portraits"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "Row upon row of stern-faced ancestors rendered in oil. Each "
+                    "portrait has the same quality of faint disapproval, as though "
+                    "the subjects were asked to sit for their likeness and found the "
+                    "experience beneath them. Their painted eyes do seem to follow "
+                    "you as you move — a trick of the light, surely."
+                ),
+            },
+            location="hall_2"
+        ),
+
+        # ── hall_3 scenery ────────────────────────────────────────────────
+        "hall_displays_3": Entity(
+            eid="hall_displays_3",
+            name="the weapon displays",
+            aliases=["weapons", "shields", "mounted weapons", "mounted shields",
+                     "wall weapons", "displays", "weapon displays",
+                     "spears", "bucklers", "helm", "helmet"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "Here the portraits have been replaced by displays of weapons "
+                    "and shields — older and more functional-looking than those in "
+                    "the trophy room. Spear hafts, rusted bucklers, a dented kettle "
+                    "helm. None of them appear to be in usable condition."
+                ),
+            },
+            location="hall_3"
+        ),
+        "bricked_wall": Entity(
+            eid="bricked_wall",
+            name="the north wall",
+            aliases=["north wall", "wall", "bricked wall", "stonework",
+                     "newer stonework", "section of wall", "different stonework"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "A section of the north wall where the stonework is noticeably "
+                    "newer than its surroundings — lighter in colour, the mortar "
+                    "less weathered. Something was sealed up here, and not too "
+                    "long ago in the life of this building. There is no visible "
+                    "mechanism to open it from this side."
+                ),
+                "desc_open": (
+                    "The passage that was hidden behind the newer stonework stands "
+                    "open. Cold air drifts through from the cellar below."
+                ),
+            },
+            location="hall_3"
+        ),
+
+        # ── entryway scenery ──────────────────────────────────────────────
+        "garden_flagstones": Entity(
+            eid="garden_flagstones",
+            name="the flagstones",
+            aliases=["flagstones", "stones", "paving", "path", "ground",
+                     "flags", "paved ground"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "Large flat stones that once formed a formal approach to the "
+                    "manor. Many have cracked and shifted as roots have pushed up "
+                    "beneath them. Moss fills the gaps. In places the ground has "
+                    "swallowed them entirely."
+                ),
+            },
+            location="entryway"
+        ),
+        "garden_hedges": Entity(
+            eid="garden_hedges",
+            name="the hedges",
+            aliases=["hedges", "hedge", "overgrown hedges", "bushes",
+                     "shrubs", "greenery", "walls of green"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "What were once neatly trimmed ornamental hedges have grown "
+                    "into irregular dark-green walls, easily twice your height. "
+                    "They close in the garden on all sides except where the iron "
+                    "gate and the gatehouse provide gaps."
+                ),
+            },
+            location="entryway"
+        ),
+        "iron_gate": Entity(
+            eid="iron_gate",
+            name="the iron gate",
+            aliases=["iron gate", "gate", "rusted gate", "rusted iron gate",
+                     "garden gate", "west gate"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "A tall iron gate set into the hedge, its bars eaten through "
+                    "with rust. It hangs permanently open — the hinges have long "
+                    "since fused in that position. The wooded path lies beyond."
+                ),
+            },
+            location="entryway"
+        ),
+
+        # ── gatehouse scenery ─────────────────────────────────────────────
+        "portcullis": Entity(
+            eid="portcullis",
+            name="the portcullis",
+            aliases=["portcullis", "gate", "gatehouse gate",
+                     "rusted portcullis", "iron portcullis"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "The portcullis is raised and rusted solid in that position. "
+                    "Its iron teeth point downward, suspended above the road. "
+                    "The mechanism that would lower it is somewhere in the "
+                    "gatehouse structure above, but whatever chain or counterweight "
+                    "operated it has long since failed."
+                ),
+            },
+            location="gatehouse"
+        ),
+        "carriage_road": Entity(
+            eid="carriage_road",
+            name="the old road",
+            aliases=["road", "carriage road", "old road", "track", "lane"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "The road passes beneath the gatehouse arch and disappears "
+                    "into the trees to the east. Wheel ruts are still faintly "
+                    "visible in the packed earth, though grass has begun to "
+                    "reclaim them. It leads somewhere — but not somewhere you "
+                    "need to go just yet."
+                ),
+            },
+            location="gatehouse"
+        ),
+
+        # ── wooded_path scenery ───────────────────────────────────────────
+        "woodland": Entity(
+            eid="woodland",
+            name="the trees",
+            aliases=["trees", "woodland", "woods", "forest", "undergrowth",
+                     "branches", "tree", "dark trees", "canopy"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "The trees press close on both sides of the narrow path, their "
+                    "branches interlocking overhead to form a low canopy. The light "
+                    "here is greenish and uncertain. Further west the path bends "
+                    "out of sight. It is very quiet."
+                ),
+            },
+            location="wooded_path"
+        ),
+
+        # ── trophy room additional scenery ────────────────────────────────
+        "animal_heads": Entity(
+            eid="animal_heads",
+            name="the animal heads",
+            aliases=["animal heads", "heads", "trophies", "mounted heads",
+                     "stag heads", "boar heads", "hunting trophies",
+                     "animal head", "trophy", "head"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "A collection of mounted animal heads — stags, boars, a wolf "
+                    "with glass eyes that catch the light unpleasantly. They are "
+                    "dusty and several have lost patches of fur. Someone spent "
+                    "considerable time and effort acquiring these, and now no one "
+                    "tends them."
+                ),
+            },
+            location="trophy_room"
+        ),
+
+        # The oak door connects hall_1 <-> foyer.
         # Locked with key_id 1 (brass key).
         "oak_door": Entity(
             eid="oak_door",
             name="an oak door",
             aliases=["door", "oak door"],
-            tags={"door", "openable", "lockable"},
+            tags={"door", "openable", "lockable", "scenery"},
             props={
                 "desc": "A sturdy oak door. It looks unimpressed.",
                 "open": False,
@@ -298,7 +512,7 @@ def build_demo_world() -> World:
                 "room_a": "hall_1",
                 "room_b": "foyer"
             },
-            location="hall"
+            location="hall_1"
         ),
 
         # ======================================================
@@ -496,8 +710,8 @@ def build_demo_world() -> World:
         "study_door": Entity(
             eid="study_door",
             name="a heavy iron door",
-            aliases=["door", "iron door", "study door", "north door"],
-            tags={"door", "openable", "lockable"},
+            aliases=["door", "iron door", "study door", "south door"],
+            tags={"door", "openable", "lockable", "scenery"},
             props={
                 "desc": "A heavy door fitted with a large iron lock. It looks serious.",
                 "open": False,
