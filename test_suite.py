@@ -1,7 +1,7 @@
 """
 test_suite.py
 
-Consolidated regression and improvement test suite for the bafflehouse
+Consolidated regression and improvement test suite for the manor
 interactive fiction engine.
 
 USAGE
@@ -396,7 +396,7 @@ def test_puzzles() -> Suite:
 
     cmd(w, "pull lever")
     s.check("puzzle 1: hall_3 north passage opened",
-            w.rooms["hall_3"].exits.get("north") == "cellar")
+            w.rooms["hall_3"].exits.get("north") == "cellar_passage")
 
     # Puzzle 2: journal -> antler -> display key -> case
     w = fresh()
@@ -980,7 +980,7 @@ def test_map_expansion() -> Suite:
     cmd(w, "light lamp")
     cmd(w, "pull lever")
     s.check("lever opens hall_3 north passage",
-            w.rooms["hall_3"].exits.get("north") == "cellar")
+            w.rooms["hall_3"].exits.get("north") == "cellar_passage")
 
     # ── Weapons and armor in trophy room ─────────────────────
     w = fresh()
@@ -1062,6 +1062,170 @@ def test_map_expansion() -> Suite:
 
 
 # ============================================================
+# SECTION 10 — NPC system (Jasper the cat)  [symbolic]
+# ============================================================
+
+def test_npc_jasper() -> Suite:
+    s = Suite("SECTION 10 — NPC system (Jasper the cat)")
+    import pathlib, engine
+    from npc import JASPER_EVENTS
+
+    def npc_fresh():
+        """Fresh world with clean NPC state."""
+        engine._NPC_INSTANCES.clear()
+        pathlib.Path("./npc_memory.json").unlink(missing_ok=True)
+        engine.NPC_MEMORY._store.clear()
+        engine.NPC_MEMORY.register_events("jasper", JASPER_EVENTS)
+        w = fresh()
+        return w
+
+    def set_trust(neutral=False, friendly=False):
+        """Convenience: set Jasper's trust to a useful tier."""
+        if friendly:
+            engine.NPC_MEMORY.reputation("jasper").confirmations    = 15.0
+            engine.NPC_MEMORY.reputation("jasper").disconfirmations = 6.0
+        elif neutral:
+            engine.NPC_MEMORY.reputation("jasper").confirmations    = 8.0
+            engine.NPC_MEMORY.reputation("jasper").disconfirmations = 8.0
+
+    def place_jasper(w, room_id):
+        """Move Jasper to a room and sync all data structures."""
+        from engine import get_npc_instances
+        npcs = get_npc_instances(w)
+        jasper = npcs["jasper"]
+        if jasper.location in w.rooms and "jasper" in w.rooms[jasper.location].entities:
+            w.rooms[jasper.location].entities.remove("jasper")
+        jasper.location = room_id
+        w.entities["jasper"].location = room_id
+        if "jasper" not in w.rooms[room_id].entities:
+            w.rooms[room_id].entities.append("jasper")
+        return jasper
+
+    # ── World content ─────────────────────────────────────────
+    w = npc_fresh()
+    s.check("kitchen room added",       "kitchen"        in w.rooms)
+    s.check("cellar_passage added",     "cellar_passage" in w.rooms)
+    s.check("jasper entity present",    "jasper"         in w.entities)
+    s.check("cat_food in kitchen",      w.entities["cat_food"].location == "kitchen")
+    s.check("catnip starts hidden",     w.entities["catnip"].location == "hidden")
+    s.check("catnip not visible yet",   not w.entities["catnip"].props.get("visible"))
+    s.check("cellar north->passage",    w.rooms["cellar"].exits.get("north") == "cellar_passage")
+    s.check("passage east->cellar",     w.rooms["cellar_passage"].exits.get("east") == "cellar")
+    s.check("passage west->kitchen",    w.rooms["cellar_passage"].exits.get("west") == "kitchen")
+
+    # ── Catnip reveal ─────────────────────────────────────────
+    w = npc_fresh(); w.player.location = "entryway"
+    out, _ = cmd(w, "examine hedges")
+    s.check("examine hedges reveals catnip", w.entities["catnip"].props.get("visible"), out)
+    s.check("catnip added to entryway",      "catnip" in w.rooms["entryway"].entities)
+    out, _ = cmd(w, "take catnip")
+    s.check("catnip takeable after reveal",  "catnip" in w.player.inventory, out)
+
+    # Second examine does not duplicate catnip in room
+    w = npc_fresh(); w.player.location = "entryway"
+    cmd(w, "examine hedges")
+    cmd(w, "examine hedges")
+    count = w.rooms["entryway"].entities.count("catnip")
+    s.check("catnip not duplicated on second examine", count == 1)
+
+    # ── Kitchen access ────────────────────────────────────────
+    w = npc_fresh(); w.player.location = "cellar"
+    for item in ("oil_lamp","lamp_oil","matchbox"):
+        move_entity(w, item, "player")
+    cmd(w, "fill lamp with oil")
+    cmd(w, "light lamp")
+    cmd(w, "pull lever")
+    cmd(w, "go north")
+    s.check("cellar north -> cellar_passage", w.player.location == "cellar_passage")
+    cmd(w, "go west")
+    s.check("cellar_passage west -> kitchen", w.player.location == "kitchen")
+    out, _ = cmd(w, "take cat food")
+    s.check("cat_food takeable in kitchen",   "cat_food" in w.player.inventory, out)
+
+    # ── Jasper starting disposition ───────────────────────────
+    w = npc_fresh()
+    from engine import get_npc_instances, NPC_MEMORY
+    get_npc_instances(w)
+    s.check("jasper starts cautious", NPC_MEMORY.disposition("jasper") == "cautious")
+    s.check("starting trust < 0.35",  NPC_MEMORY.trust("jasper") < 0.35)
+
+    # ── Cautious: flee on player presence ─────────────────────
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    out, _ = cmd(w, "examine portraits")
+    s.check("cautious jasper flees or message printed",
+            jasper.location != "hall_2" or
+            any(x in out.lower() for x in ["cat","bolt","disappear","walks","grey"]),
+            out[:80])
+
+    # ── Pet rejected when cautious ────────────────────────────
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    out, _ = cmd(w, "pet cat")
+    s.check("pet cautious jasper -> refused",
+            any(x in out.lower() for x in
+                ["won't","flattens","retreats","backs","isn't here"]), out)
+
+    # ── Call verb ─────────────────────────────────────────────
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    out, _ = cmd(w, "call cat")
+    s.check("call cat -> narrative (not error)",
+            len(out) > 3 and "beg your pardon" not in out.lower(), out)
+
+    # ── Feed at neutral: consumes food, increases trust ───────
+    w = npc_fresh(); w.player.location = "hall_1"
+    jasper = place_jasper(w, "hall_1")
+    set_trust(neutral=True)
+    move_entity(w, "cat_food", "player")
+    t0 = NPC_MEMORY.trust("jasper")
+    out, _ = cmd(w, "feed cat food to cat")
+    s.check("feed -> food consumed",
+            w.entities["cat_food"].location == "consumed", out)
+    s.check("feed -> trust increases",
+            NPC_MEMORY.trust("jasper") > t0)
+
+    # ── Feed catnip: consumes, increases trust more than food ─
+    w = npc_fresh(); w.player.location = "entryway"
+    jasper = place_jasper(w, "entryway")
+    set_trust(neutral=True)
+    cmd(w, "examine hedges")
+    cmd(w, "take catnip")
+    t0 = NPC_MEMORY.trust("jasper")
+    out, _ = cmd(w, "feed catnip to cat")
+    s.check("catnip consumed when fed", w.entities["catnip"].location == "consumed", out)
+    s.check("catnip increases trust",   NPC_MEMORY.trust("jasper") > t0)
+
+    # ── Offer: trust increases, item not consumed ─────────────
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    set_trust(neutral=True)
+    move_entity(w, "brass_key", "player")
+    t0 = NPC_MEMORY.trust("jasper")
+    out, _ = cmd(w, "offer brass key to cat")
+    s.check("offer -> trust increases",     NPC_MEMORY.trust("jasper") > t0, out)
+    s.check("offer -> item not consumed",   "brass_key" in w.player.inventory, out)
+
+    # ── Pet succeeds at friendly ──────────────────────────────
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    set_trust(friendly=True)
+    s.check("friendly disposition confirmed",
+            NPC_MEMORY.disposition("jasper") in ("friendly","devoted"))
+    out, _ = cmd(w, "pet cat")
+    s.check("pet friendly jasper -> purr/lean response",
+            any(x in out.lower() for x in
+                ["leans","purr","hand","closes","eye","scratch"]), out)
+
+    # ── Cleanup ───────────────────────────────────────────────
+    engine._NPC_INSTANCES.clear()
+    pathlib.Path("./npc_memory.json").unlink(missing_ok=True)
+    engine.NPC_MEMORY._store.clear()
+
+    return s
+
+
+# ============================================================
 # Registry
 # ============================================================
 
@@ -1080,6 +1244,7 @@ SECTIONS: dict[str, tuple[Callable, Set[str]]] = {
     "improvement_a": (test_parser_improvement_a,  {"semantic"}),
     "improvement_b": (test_parser_improvement_b,  {"symbolic"}),
     "map_expansion": (test_map_expansion,          {"symbolic"}),
+    "npc_jasper":    (test_npc_jasper,              {"symbolic"}),
 }
 
 

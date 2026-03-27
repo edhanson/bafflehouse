@@ -21,6 +21,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from ir import clarify_ir
 from model import World
+from npc import NPC, NPC_REGISTRY, npc_tick, handle_pet_npc, handle_feed_npc, handle_offer_npc, handle_call_npc
+from npc_bayesian import NPCMemory
 from parser import (
     DIRECTIONS,
     ParserSystem,
@@ -30,6 +32,41 @@ from parser import (
     parse_to_candidates,
     split_compound,
 )
+
+
+# ============================================================
+# NPC system — module-level singletons
+# ============================================================
+
+# Persistent memory store — loaded from npc_memory.json on first access.
+NPC_MEMORY = NPCMemory("./npc_memory.json")
+
+# Register Jasper's custom event table before any reputation is loaded.
+from npc import JASPER_EVENTS
+NPC_MEMORY.register_events("jasper", JASPER_EVENTS)
+
+# Runtime NPC instances — one per creature currently in the world.
+# Keyed by npc_id.  Reset each time build_demo_world() is called
+# (in main.py startup) but memory persists across sessions.
+_NPC_INSTANCES: dict = {}
+
+
+def get_npc_instances(world: World) -> dict:
+    """
+    Return (creating if absent) the runtime NPC instances for the world.
+    Each NPC instance is initialised to its start_room from the definition.
+    """
+    global _NPC_INSTANCES
+    if not _NPC_INSTANCES:
+        for npc_id, defn in NPC_REGISTRY.items():
+            _NPC_INSTANCES[npc_id] = NPC(
+                defn     = defn,
+                location = defn.start_room,
+            )
+            # Sync entity location in world model
+            if npc_id in world.entities:
+                world.entities[npc_id].location = defn.start_room
+    return _NPC_INSTANCES
 
 
 # ============================================================
@@ -328,6 +365,19 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
 
     ent = world.entity(obj)
     world.note_ref([obj])
+
+    # Special reveal: examining the garden hedges uncovers the catnip.
+    # The catnip entity starts with props["visible"] = False; examining
+    # the hedges sets it True so the entity becomes findable and takeable.
+    if obj == "garden_hedges" and "catnip" in world.entities:
+        catnip = world.entities["catnip"]
+        if not catnip.props.get("visible", False):
+            catnip.props["visible"] = True
+            # Move it into the room so it appears in entity listings.
+            catnip.location = world.player.location
+            room = world.rooms.get(world.player.location)
+            if room and "catnip" not in room.entities:
+                room.entities.append("catnip")
 
     # For liquid-bearing containers, swap to the empty description once drained.
     # For scenery with a state-dependent description (e.g. bricked_wall after
@@ -872,7 +922,8 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
         # Open the passage: add "west" exit to the hall, and a reciprocal
         # "east" exit would lead back to the cellar top, but we instead route
         # it back to the cellar for simplicity (the foyer route still works).
-        world.rooms["hall_3"].exits["north"] = "cellar"
+        world.rooms["hall_3"].exits["north"] = "cellar_passage"
+        world.rooms["cellar_passage"].exits["south"] = "hall_3"
         world.note_ref([obj])
 
         return (
@@ -1285,6 +1336,125 @@ def handle_wield(world: World, ir: dict) -> Tuple[str, bool]:
     ), False
 
 
+def handle_pet(world: World, ir: dict) -> tuple:
+    """
+    Pet / stroke a living NPC.  Routes to the NPC interaction layer.
+    Only works on entities tagged 'npc'; for non-NPC targets produces
+    a gentle redirect.
+    """
+    obj = ir.get("obj")
+    if not obj:
+        return "Pet what?", False
+    if obj not in world.entities:
+        return "You don't see that here.", False
+    ent = world.entity(obj)
+    if "npc" not in ent.tags:
+        return f"You give {ent.name} an affectionate pat. Nothing happens.", True
+    npcs = get_npc_instances(world)
+    npc  = npcs.get(obj)
+    if not npc:
+        return "You don't see that here.", False
+    return handle_pet_npc(world, npc, NPC_MEMORY)
+
+
+def handle_feed(world: World, ir: dict) -> tuple:
+    """
+    Feed an NPC a food item.  Expects obj=NPC, iobj=food item.
+    Also accepts 'feed cat' with a single food item in inventory.
+    """
+    obj  = ir.get("obj")
+    iobj = ir.get("iobj")
+
+    if not obj:
+        return "Feed what?", False
+
+    # If only one argument, check if it's the NPC or the food
+    target_eid = None
+    food_eid   = None
+
+    if obj and obj in world.entities:
+        ent = world.entity(obj)
+        if "npc" in ent.tags:
+            target_eid = obj
+            food_eid   = iobj
+        elif "food" in ent.tags or "catnip" in ent.tags:
+            # 'feed cat food to cat' or 'feed food' — swap obj/iobj
+            food_eid   = obj
+            target_eid = iobj
+
+    if not target_eid:
+        return "Feed what to whom?", False
+
+    # If food not specified, try to find one in inventory
+    if not food_eid:
+        food_candidates = [
+            eid for eid in world.player.inventory
+            if "food" in world.entity(eid).tags
+            or "catnip" in world.entity(eid).tags
+        ]
+        if not food_candidates:
+            return "You aren't carrying anything to feed it.", False
+        if len(food_candidates) > 1:
+            return "What do you want to feed it — be specific.", False
+        food_eid = food_candidates[0]
+
+    npcs = get_npc_instances(world)
+    npc  = npcs.get(target_eid)
+    if not npc:
+        return "You don't see that here.", False
+
+    return handle_feed_npc(world, npc, NPC_MEMORY, food_eid)
+
+
+def handle_offer(world: World, ir: dict) -> tuple:
+    """
+    Offer an item to an NPC — builds trust without consuming the item.
+    """
+    obj  = ir.get("obj")
+    iobj = ir.get("iobj")
+
+    if not obj or not iobj:
+        return "Offer what to whom?", False
+
+    # Determine which is the NPC and which is the item
+    if obj in world.entities and "npc" in world.entity(obj).tags:
+        target_eid = obj
+        item_eid   = iobj
+    elif iobj in world.entities and "npc" in world.entity(iobj).tags:
+        target_eid = iobj
+        item_eid   = obj
+    else:
+        return "Offer it to what?", False
+
+    npcs = get_npc_instances(world)
+    npc  = npcs.get(target_eid)
+    if not npc:
+        return "You don't see that here.", False
+
+    return handle_offer_npc(world, npc, NPC_MEMORY, item_eid)
+
+
+def handle_call(world: World, ir: dict) -> tuple:
+    """
+    Call out to or speak to an NPC.  Purely narrative — no trust change.
+    """
+    obj = ir.get("obj")
+    if not obj:
+        return "Call to what?", False
+    if obj not in world.entities:
+        return "You don't see that here.", False
+    ent = world.entity(obj)
+    if "npc" not in ent.tags:
+        return f"{ent.name.capitalize()} doesn't respond.", True
+    if world.player.location != world.entities[obj].location:
+        return "It isn't here right now.", False
+    npcs = get_npc_instances(world)
+    npc  = npcs.get(obj)
+    if not npc:
+        return "You don't see that here.", False
+    return handle_call_npc(world, npc, NPC_MEMORY)
+
+
 # ============================================================
 # Handler dispatch table
 # ============================================================
@@ -1313,6 +1483,10 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "use":        handle_use,
     "unmount":    handle_unmount,
     "wield":      handle_wield,
+    "pet":        handle_pet,
+    "feed":       handle_feed,
+    "offer":      handle_offer,
+    "call":       handle_call,
 }
 
 
@@ -1430,6 +1604,9 @@ def process_input(
         expanded_segments.extend(expand_coordinated_objects(seg))
 
     outputs: List[str] = []
+    any_consumed    = False
+    player_moved    = False
+    location_before = world.player.location
 
     for seg in expanded_segments:
         # Rebuild the semantic entity index for the current visibility state.
@@ -1478,5 +1655,25 @@ def process_input(
 
         if consumed:
             world.clock.advance(1)
+            any_consumed = True
+            if world.player.location != location_before:
+                player_moved    = True
+                location_before = world.player.location
+
+    # ---- NPC tick: runs once per turn after all segments execute ----
+    # Only ticks when at least one action was consumed (so meta commands
+    # like "look" and "inventory" do not advance NPC state).
+    if any_consumed:
+        npcs = get_npc_instances(world)
+        for npc in npcs.values():
+            npc_msgs = npc_tick(
+                world        = world,
+                npc          = npc,
+                memory       = NPC_MEMORY,
+                player_moved = player_moved,
+            )
+            outputs.extend(npc_msgs)
+        # Persist trust changes after every consumed action.
+        NPC_MEMORY.save()
 
     return "\n".join(outputs), None

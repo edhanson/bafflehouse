@@ -1,0 +1,493 @@
+# npc.py
+#
+# NPC data model, wandering logic, and per-turn behaviour tick for Bafflehouse.
+#
+# Architecture
+# ────────────
+# NPCDefinition   — static data describing a creature (name, home rooms,
+#                   event table, disposition->behaviour mappings).
+# NPC             — runtime instance: current location, last-known player
+#                   location, any per-session state.
+# npc_tick()      — called by engine.process_input after every player action.
+#                   Moves NPCs, updates trust from proximity, generates
+#                   atmospheric narrative lines, and returns them to the engine
+#                   to append to the turn output.
+#
+# All ML state (trust, disposition) lives in NPCMemory (npc_bayesian.py).
+# This file only contains behaviour logic — what the NPC does given its
+# current disposition and situation.
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional, Set, Tuple
+
+from npc_bayesian import BayesianReputation, NPCMemory
+
+
+# ── Atmospheric message pools ────────────────────────────────────────────
+# Keyed by (npc_id, disposition, situation).  Each entry is a list of
+# strings; one is chosen at random each time that situation fires.
+# The engine appends these to the turn output after the player's action.
+
+JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
+    # Player enters Jasper's room — various dispositions
+    ("enters_room", "cautious"): [
+        "A grey cat bolts from the corner and slips through the doorway.",
+        "Something small and fast disappears around the edge of the door.",
+        "A cat that was sitting in the shadows stands, stares at you for one "
+        "cold moment, then walks deliberately out of the room.",
+    ],
+    ("enters_room", "wary"): [
+        "A grey cat regards you from across the room, ears slightly back.",
+        "A cat is sitting against the far wall. It watches you without moving.",
+        "The cat lifts its head as you enter, then looks deliberately away.",
+    ],
+    ("enters_room", "neutral"): [
+        "A grey cat is here. It glances at you, then resumes washing its paw.",
+        "The cat acknowledges your arrival with a slow blink, then looks away.",
+        "A cat sits near the wall. It doesn't flee, but doesn't approach either.",
+    ],
+    ("enters_room", "friendly"): [
+        "The cat looks up as you enter and makes a small sound.",
+        "A grey cat trots toward you, tail raised like a question mark.",
+        "The cat stands and stretches elaborately as you come in.",
+    ],
+    ("enters_room", "devoted"): [
+        "Jasper is here. He gets up the moment he sees you.",
+        "The cat pads toward you immediately, weaving between your feet.",
+        "Jasper chirps and comes to meet you at the door.",
+    ],
+
+    # Jasper is already in the same room — ambient presence messages
+    ("ambient", "cautious"): [],   # too scared to produce ambient lines
+    ("ambient", "wary"): [
+        "The cat shifts position slightly, keeping its eyes on you.",
+        "The cat's tail flicks once.",
+    ],
+    ("ambient", "neutral"): [
+        "The cat yawns enormously.",
+        "The cat sits very still, apparently staring at the wall.",
+        "The cat grooms itself with focused intensity.",
+    ],
+    ("ambient", "friendly"): [
+        "The cat bumps its head against your leg.",
+        "The cat winds between your feet.",
+        "A quiet rumble — the cat is purring.",
+    ],
+    ("ambient", "devoted"): [
+        "Jasper stays close to your heels.",
+        "Jasper watches the corridor ahead of you.",
+        "The cat's ears swivel, tracking sounds further down the hall.",
+    ],
+
+    # Reactions to specific player actions
+    ("fed", "neutral"): [
+        "The cat eats with undisguised interest, then sits back and regards you.",
+        "The cat demolishes the food quickly and looks up for more.",
+    ],
+    ("fed", "friendly"): [
+        "The cat eats, then rubs its face against your hand.",
+        "The cat purrs loudly while eating.",
+    ],
+    ("fed", "devoted"): [
+        "Jasper eats quickly, then immediately returns to your side.",
+    ],
+    ("catnip", "neutral"): [
+        "The cat sniffs the catnip, rolls onto its back, and forgets you exist.",
+        "Something in the cat's dignified composure dissolves. It rolls wildly.",
+    ],
+    ("catnip", "friendly"): [
+        "The cat snatches the catnip and kicks it across the floor, purring.",
+    ],
+    ("petted", "friendly"): [
+        "The cat leans into your hand.",
+        "A deep purr. The cat closes its eyes.",
+        "The cat turns its head so you scratch behind its ear.",
+    ],
+    ("petted", "devoted"): [
+        "Jasper presses his whole weight against your hand.",
+        "Jasper closes his eyes and purrs.",
+    ],
+    ("pet_rejected", "cautious"): [
+        "The cat flattens its ears and backs away.",
+        "The cat retreats to a safer distance.",
+    ],
+    ("pet_rejected", "wary"): [
+        "The cat leans away from your outstretched hand.",
+        "The cat tolerates your proximity but won't let you touch it.",
+    ],
+    ("pet_rejected", "neutral"): [
+        "The cat allows the briefest contact, then steps aside.",
+    ],
+    ("offered_item", "cautious"): [
+        "The cat stares at the offered item from a distance, then leaves.",
+    ],
+    ("offered_item", "wary"): [
+        "The cat approaches a few steps, sniffs the air, then retreats.",
+    ],
+    ("offered_item", "neutral"): [
+        "The cat sniffs your offering with careful attention.",
+    ],
+    ("called", "cautious"): [
+        "No response.",
+        "The cat, if it heard you, gives no sign.",
+    ],
+    ("called", "wary"): [
+        "The cat glances in your direction.",
+        "An ear rotates toward you. That is all.",
+    ],
+    ("called", "neutral"): [
+        "The cat looks at you briefly, then looks away.",
+    ],
+    ("called", "friendly"): [
+        "The cat meows.",
+        "The cat trots toward you.",
+    ],
+    ("called", "devoted"): [
+        "Jasper comes immediately.",
+        "Jasper chirps and comes to your side.",
+    ],
+}
+
+
+def get_message(npc_id: str, situation: str, disposition: str) -> Optional[str]:
+    """
+    Return a random atmospheric message for the given situation and disposition,
+    or None if no messages are defined for that combination.
+    """
+    pool = JASPER_MESSAGES.get((situation, disposition), [])
+    if not pool:
+        return None
+    return random.choice(pool)
+
+
+# ── NPC definition ────────────────────────────────────────────────────────
+
+@dataclass
+class NPCDefinition:
+    """
+    Static data describing a creature.  One instance per creature type.
+    Shared across all runtime NPC instances of that type.
+    """
+    npc_id:        str
+    name:          str                    # display name, e.g. "a grey cat"
+    proper_name:   str                    # once known, e.g. "Jasper"
+    home_rooms:    Set[str]               # rooms the NPC may wander into
+    start_room:    str                    # where it begins each session
+    wander_chance: float = 0.4            # probability of moving each turn
+
+    # Disposition -> set of interactions the NPC will accept
+    # Interactions not listed for a disposition are rejected
+    accepts_at: Dict[str, Set[str]] = field(default_factory=dict)
+
+    # Custom event table (confirm_delta, disconfirm_delta) per named event.
+    # Merged with DEFAULT_EVENTS at construction time.
+    event_overrides: Dict[str, Tuple[float, float]] = field(
+        default_factory=dict
+    )
+
+    # Whether the NPC follows the player when devoted
+    follows_when_devoted: bool = True
+
+    # Whether the NPC fights alongside the player when devoted
+    fights_when_devoted: bool = True
+
+
+# ── Runtime NPC instance ──────────────────────────────────────────────────
+
+@dataclass
+class NPC:
+    """
+    Runtime state for one NPC instance.
+
+    defn           — the NPCDefinition for this creature type
+    location       — current room ID
+    last_room      — room the NPC was in last turn (for rapid-entry detection)
+    revealed_name  — True once the player has learned the NPC's proper name
+    session_moves  — number of turns elapsed this session (for diagnostics)
+    """
+    defn:           NPCDefinition
+    location:       str
+    last_room:      str       = ""
+    revealed_name:  bool      = False
+    session_moves:  int       = 0
+
+    @property
+    def npc_id(self) -> str:
+        return self.defn.npc_id
+
+    @property
+    def display_name(self) -> str:
+        return self.defn.proper_name if self.revealed_name else self.defn.name
+
+
+# ── Wandering logic ───────────────────────────────────────────────────────
+
+def _choose_wander_destination(
+    npc:   NPC,
+    world: object,             # World — typed as object to avoid circular import
+    away_from: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Choose a room for the NPC to wander into.
+
+    If away_from is set (a room ID), prefer exits that lead away from it —
+    used when the NPC is fleeing.  Returns None if no valid destination exists.
+    """
+    current_room = world.rooms.get(npc.location)
+    if not current_room:
+        return None
+
+    # Candidate destinations: adjacent rooms within home territory
+    candidates = [
+        rid for rid in current_room.exits.values()
+        if rid in npc.defn.home_rooms
+    ]
+    if not candidates:
+        return None
+
+    if away_from and len(candidates) > 1:
+        # Prefer rooms that are not the player's room
+        fleeing = [r for r in candidates if r != away_from]
+        if fleeing:
+            return random.choice(fleeing)
+
+    return random.choice(candidates)
+
+
+def _move_npc(npc: NPC, destination: str, world: object) -> None:
+    """Move an NPC entity to a new room, updating both model and world."""
+    # Remove from current room
+    current = world.rooms.get(npc.location)
+    if current and npc.npc_id in current.entities:
+        current.entities.remove(npc.npc_id)
+
+    # Add to new room
+    npc.last_room = npc.location
+    npc.location  = destination
+    # Sync the world entity location so do_look finds Jasper in the right room
+    if npc.npc_id in world.entities:
+        world.entities[npc.npc_id].location = destination
+    dest = world.rooms.get(destination)
+    if dest and npc.npc_id not in dest.entities:
+        dest.entities.append(npc.npc_id)
+
+
+# ── Per-turn NPC tick ─────────────────────────────────────────────────────
+
+def npc_tick(
+    world:      object,          # World
+    npc:        NPC,
+    memory:     NPCMemory,
+    player_moved: bool = False,  # True if the player just moved rooms
+) -> List[str]:
+    """
+    Advance one NPC by one game turn.  Called by engine.process_input after
+    every player action.
+
+    Returns a list of narrative strings to append to the turn output.
+    May be empty.
+
+    Behaviour summary:
+      - If the player is in Jasper's room:
+          * Record "player_present" trust event
+          * Disposition cautious -> flee to an adjacent room
+          * Otherwise produce an ambient or enters_room message
+      - If the player just moved into Jasper's room -> enters_room message
+      - If devoted and player moved -> follow the player
+      - Otherwise -> random wander with probability wander_chance
+    """
+    npc.session_moves += 1
+    messages: List[str] = []
+
+    player_room  = world.player.location
+    npc_room     = npc.location
+    same_room    = (player_room == npc_room)
+    disposition  = memory.disposition(npc.npc_id)
+
+    # ── Devoted: follow the player wherever they go ───────────────────────
+    if disposition == "devoted" and npc.defn.follows_when_devoted:
+        if not same_room and player_room in npc.defn.home_rooms:
+            _move_npc(npc, player_room, world)
+            npc_room  = player_room
+            same_room = True
+            # Don't produce an enters_room message here — the player just
+            # moved and the cat arriving is conveyed by the ambient message.
+
+    # ── Player is in the same room as the NPC ────────────────────────────
+    if same_room:
+        # Record passive presence
+        memory.record(npc.npc_id, "player_present")
+        disposition = memory.disposition(npc.npc_id)   # may have changed
+
+        if disposition == "cautious":
+            # Flee — move away from the player's room
+            dest = _choose_wander_destination(npc, world, away_from=player_room)
+            if dest:
+                _move_npc(npc, dest, world)
+                msg = get_message(npc.npc_id, "enters_room", "cautious")
+                if msg:
+                    messages.append(msg)
+                # Rapid re-entry penalty: if the player was in the NPC's
+                # last room too, the NPC is being repeatedly startled.
+                if npc.last_room == player_room:
+                    memory.record(npc.npc_id, "player_startled")
+            return messages
+
+        # Not cautious — stay and produce ambient message (low probability
+        # so it doesn't fire every single turn)
+        if player_moved:
+            # Player just arrived — enters_room message
+            msg = get_message(npc.npc_id, "enters_room", disposition)
+            if msg:
+                messages.append(msg)
+        else:
+            # Player was already here — occasional ambient message
+            if random.random() < 0.25:
+                msg = get_message(npc.npc_id, "ambient", disposition)
+                if msg:
+                    messages.append(msg)
+
+        return messages
+
+    # ── NPC is in a different room — random wander ────────────────────────
+    if random.random() < npc.defn.wander_chance:
+        dest = _choose_wander_destination(npc, world)
+        if dest:
+            _move_npc(npc, dest, world)
+
+    return messages
+
+
+# ── Interaction handlers ──────────────────────────────────────────────────
+# These are called by engine action handlers when the player targets an NPC.
+
+def handle_pet_npc(
+    world: object, npc: NPC, memory: NPCMemory
+) -> Tuple[str, bool]:
+    """
+    Player attempts to pet the NPC.  Only succeeds at friendly+ disposition.
+    """
+    disposition = memory.disposition(npc.npc_id)
+
+    if world.player.location != npc.location:
+        return f"{npc.display_name.capitalize()} isn't here.", False
+
+    if disposition in ("cautious", "wary", "neutral"):
+        memory.record(npc.npc_id, "player_startled")
+        msg = get_message(npc.npc_id, "pet_rejected", disposition)
+        return msg or f"{npc.display_name.capitalize()} won't let you.", False
+
+    memory.record(npc.npc_id, "player_petted")
+    msg = get_message(npc.npc_id, "petted", disposition)
+    return msg or f"You pet {npc.display_name}.", True
+
+
+def handle_feed_npc(
+    world: object, npc: NPC, memory: NPCMemory, food_eid: str
+) -> Tuple[str, bool]:
+    """
+    Player feeds the NPC a specific food item.  Consumes the item from
+    inventory and fires the appropriate trust event.
+    """
+    if world.player.location != npc.location:
+        return f"{npc.display_name.capitalize()} isn't here.", False
+
+    if food_eid not in world.player.inventory:
+        food_ent = world.entities.get(food_eid)
+        name = food_ent.name if food_ent else "that"
+        return f"You aren't carrying {name}.", False
+
+    food_ent = world.entities[food_eid]
+    disposition = memory.disposition(npc.npc_id)
+
+    # Determine event type from food tags
+    if "catnip" in food_ent.tags:
+        event = "player_gave_catnip"
+        situation = "catnip"
+    else:
+        event = "player_gave_food"
+        situation = "fed"
+
+    # Consume the food
+    if food_eid in world.player.inventory: world.player.inventory.remove(food_eid)
+    food_ent.location = "consumed"
+
+    memory.record(npc.npc_id, event)
+    new_disposition = memory.disposition(npc.npc_id)
+
+    msg = get_message(npc.npc_id, situation, new_disposition)
+    return msg or f"You feed {npc.display_name} {food_ent.name}.", True
+
+
+def handle_offer_npc(
+    world: object, npc: NPC, memory: NPCMemory, item_eid: str
+) -> Tuple[str, bool]:
+    """
+    Player holds an item out toward the NPC.  Builds a small amount of trust
+    at any disposition.  Does not consume the item.
+    """
+    if world.player.location != npc.location:
+        return f"{npc.display_name.capitalize()} isn't here.", False
+
+    if item_eid not in world.player.inventory:
+        item_ent = world.entities.get(item_eid)
+        name = item_ent.name if item_ent else "that"
+        return f"You aren't carrying {name}.", False
+
+    item_ent = world.entities[item_eid]
+    memory.record(npc.npc_id, "player_offered_item")
+    disposition = memory.disposition(npc.npc_id)
+
+    msg = get_message(npc.npc_id, "offered_item", disposition)
+    return (
+        msg or f"You hold out {item_ent.name}. {npc.display_name.capitalize()} notices."
+    ), True
+
+
+def handle_call_npc(
+    world: object, npc: NPC, memory: NPCMemory
+) -> Tuple[str, bool]:
+    """
+    Player calls or speaks to the NPC.  No trust change — purely narrative.
+    """
+    disposition = memory.disposition(npc.npc_id)
+    msg = get_message(npc.npc_id, "called", disposition)
+    return msg or "Nothing happens.", True
+
+
+# ── NPC registry ──────────────────────────────────────────────────────────
+# All NPC definitions for the game, keyed by npc_id.
+# Add new NPCs here as they are introduced.
+
+from npc_bayesian import DEFAULT_EVENTS
+
+JASPER_EVENTS = {
+    **DEFAULT_EVENTS,
+    # Jasper-specific overrides — he's more sensitive to being startled
+    # than the generic model suggests
+    "player_startled": (0.0, 0.8),
+}
+
+JASPER = NPCDefinition(
+    npc_id       = "jasper",
+    name         = "a grey cat",
+    proper_name  = "Jasper",
+    home_rooms   = {"hall_1", "hall_2", "hall_3", "library"},
+    start_room   = "hall_2",
+    wander_chance= 0.4,
+    accepts_at   = {
+        "neutral":  {"feed", "offer"},
+        "friendly": {"feed", "offer", "pet"},
+        "devoted":  {"feed", "offer", "pet"},
+    },
+    event_overrides      = JASPER_EVENTS,
+    follows_when_devoted = True,
+    fights_when_devoted  = True,
+)
+
+NPC_REGISTRY: Dict[str, NPCDefinition] = {
+    "jasper": JASPER,
+}

@@ -301,6 +301,47 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         preferred_preps=["with", "on", "in", "into"],
     ),
 
+    # NPC INTERACTION VERBS ──────────────────────────────────────────
+
+    "pet": VerbDefinition(
+        verb_id="pet",
+        literal_forms=["pet", "stroke", "pat", "scratch", "cuddle",
+                       "nuzzle", "touch"],
+        semantic_examples=[
+            "pet the cat", "stroke an animal", "pat a creature",
+        ],
+        shape="verb_obj",
+    ),
+    "feed": VerbDefinition(
+        verb_id="feed",
+        literal_forms=["feed", "give food to", "give food"],
+        semantic_examples=[
+            "feed the cat", "give food to an animal",
+        ],
+        shape="verb_obj_prep_iobj",
+        preferred_preps=["to", "with"],
+    ),
+    "offer": VerbDefinition(
+        verb_id="offer",
+        literal_forms=["offer", "hold out", "extend", "present"],
+        semantic_examples=[
+            "offer something to the cat",
+            "hold out an item toward a creature",
+        ],
+        shape="verb_obj_prep_iobj",
+        preferred_preps=["to", "toward"],
+    ),
+    "call": VerbDefinition(
+        verb_id="call",
+        literal_forms=["call", "call to", "call out", "speak to",
+                       "talk to", "whistle", "whistle at", "whistle to",
+                       "speak", "talk"],
+        semantic_examples=[
+            "call to the cat", "speak to a creature", "whistle for an animal",
+        ],
+        shape="verb_obj",
+    ),
+
     # WIELD — placeholder for future combat system.
     # Tells the player to specify a target rather than routing to USE.
     "wield": VerbDefinition(
@@ -545,6 +586,14 @@ def rewrite_interaction_idioms(text: str) -> str:
         (r"^light\s+a?\s*match(?:es)?$",           r"light matchbox"),
         (r"^ignite\s+a?\s*match(?:es)?$",          r"light matchbox"),
         (r"^strike\s+a?\s*match(?:es)?\s+(.+)$",  r"light matchbox"),
+
+        # NPC interaction idioms
+        (r"^give\s+(.+)\s+to\s+(.+)$",            r"feed \1 to \2"),
+        (r"^hold\s+out\s+(.+)\s+to\s+(.+)$",     r"offer \1 to \2"),
+        (r"^hold\s+out\s+(.+)\s+toward\s+(.+)$", r"offer \1 to \2"),
+        (r"^call\s+out\s+to\s+(.+)$",             r"call \1"),
+        (r"^speak\s+to\s+(.+)$",                   r"call \1"),
+        (r"^talk\s+to\s+(.+)$",                    r"call \1"),
 
         # UNMOUNT idioms — all route to "unmount <obj>"
         (r"^take\s+down\s+(.+)$",                       r"unmount \1"),
@@ -935,6 +984,12 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "employ":      "use",
     "utilise":     "use",
     "utilize":     "use",
+    # pet-family
+    "caress":      "pet",
+    "rub":         "pet",
+    # call-family
+    "hiss at":     "call",
+    "greet":       "call",
     # unmount-family
     "unstrap":     "unmount",
     "unbuckle":    "unmount",

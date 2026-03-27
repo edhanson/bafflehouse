@@ -1,6 +1,6 @@
 # content.py
 #
-# World definition for the bafflehouse interactive fiction game.
+# World definition for the manor interactive fiction game.
 #
 # This file is the single authoritative source for all rooms, entities, and
 # the starting player state.  The engine and parser never hard-code world
@@ -176,6 +176,37 @@ def build_demo_world() -> World:
             exits={"east": "entryway"}
             # NOTE: Future expansion — west exit leads further into the woods.
         ),
+        # Kitchen — west of the cellar passage; accessible only after
+        # the lever puzzle opens the north wall of hall_3.
+        # The cat cannot reach this room (not in its home_rooms).
+        "kitchen": Room(
+            rid="kitchen",
+            title="Old Kitchen",
+            desc=(
+                "A large stone-flagged kitchen, cold and long disused. A heavy "
+                "iron range squats against the far wall, its grate choked with "
+                "ash. Shelves still hold a scatter of earthenware pots and "
+                "rusted implements. A wooden door to the east leads back to "
+                "the passage."
+            ),
+            exits={"east": "cellar_passage"}
+        ),
+        # Cellar passage — the room revealed when the lever is pulled.
+        # Connects hall_3 (south) to the wine cellar (east) to the kitchen (west).
+        # NOTE: "south" exit to hall_3 is added dynamically by the lever puzzle.
+        "cellar_passage": Room(
+            rid="cellar_passage",
+            title="Cellar Passage",
+            desc=(
+                "A low stone passage running east-west, smelling of damp and old "
+                "wood. To the east, steps descend to the wine cellar. To the west "
+                "a door stands open onto what was once the kitchen. Pale light "
+                "filters down from the hall above through the newly opened gap "
+                "to the south."
+            ),
+            exits={"east": "cellar", "west": "kitchen"}
+            # NOTE: "south" to hall_3 added dynamically by lever puzzle.
+        ),
         "cellar": Room(
             rid="cellar",
             title="Wine Cellar",
@@ -188,7 +219,7 @@ def build_demo_world() -> World:
                 "room is impenetrably dark — you can tell something is there but cannot "
                 "make it out. The foyer is back up the stairs to the east."
             ),
-            exits={"east": "foyer"}
+            exits={"east": "foyer", "north": "cellar_passage"}
         ),
     }
 
@@ -403,10 +434,32 @@ def build_demo_world() -> World:
                     "What were once neatly trimmed ornamental hedges have grown "
                     "into irregular dark-green walls, easily twice your height. "
                     "They close in the garden on all sides except where the iron "
-                    "gate and the gatehouse provide gaps."
+                    "gate and the gatehouse provide gaps. Pressing close to the "
+                    "base of the hedge, you notice a patch of small silvery-green "
+                    "plants growing wild — catnip, by the smell of it."
                 ),
             },
             location="entryway"
+        ),
+        # Catnip — hidden until the player examines garden_hedges.
+        # Starts with props["visible"] = False and location "entryway" but
+        # absent from room.entities.  handle_examine sets visible=True and
+        # appends it to the room's entity list when hedges are examined.
+        "catnip": Entity(
+            eid="catnip",
+            name="a sprig of catnip",
+            aliases=["catnip", "sprig of catnip", "sprig", "catnip plant",
+                     "silvery-green plant", "plant", "herb", "nip"],
+            tags={"portable", "catnip"},
+            props={
+                "desc": (
+                    "A small bunch of catnip pulled from the base of the hedge. "
+                    "The silvery-green leaves are pungent even to your senses. "
+                    "A cat would find this irresistible."
+                ),
+                "visible": False,   # hidden until hedges are examined
+            },
+            location="hidden"       # kept out of room.entities at startup
         ),
         "iron_gate": Entity(
             eid="iron_gate",
@@ -886,6 +939,81 @@ def build_demo_world() -> World:
                 "worn": False,
             },
             location="display_case"
+        ),
+
+        # ======================================================
+        # NPC ENTITIES
+        # ======================================================
+
+        # Jasper — a grey cat who wanders hall_1/hall_2/hall_3/library.
+        # The NPC system manages his location each turn; this entity
+        # is the world-model anchor used for visibility and examine.
+        "jasper": Entity(
+            eid="jasper",
+            name="a grey cat",
+            aliases=["cat", "grey cat", "jasper", "kitty",
+                     "the cat", "jasper the cat"],
+            tags={"npc", "living"},
+            props={
+                "desc": (
+                    "A lean grey cat with pale yellow eyes. Its fur is "
+                    "clean and well-kept despite the state of the manor, "
+                    "suggesting it has been here long enough to make itself "
+                    "comfortable. It regards you with careful, unhurried "
+                    "attention."
+                ),
+            },
+            location="hall_2"
+        ),
+
+        # ======================================================
+        # KITCHEN entities
+        # ======================================================
+
+        "cat_food": Entity(
+            eid="cat_food",
+            name="a tin of cat food",
+            aliases=["cat food", "tin of cat food", "tin", "food",
+                     "pet food", "cat tin"],
+            tags={"portable", "food"},
+            props={
+                "desc": (
+                    "A small tin with a paper label, miraculously intact. "
+                    "The label shows a contented-looking cat. "
+                    "It smells strongly even through the sealed lid."
+                ),
+            },
+            location="kitchen"
+        ),
+        "kitchen_range": Entity(
+            eid="kitchen_range",
+            name="the iron range",
+            aliases=["range", "iron range", "stove", "oven",
+                     "grate", "hearth", "fireplace"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "A massive iron range, cold for decades. The grate is "
+                    "packed with grey ash and the iron is furred with rust. "
+                    "Someone once cooked serious quantities of food on this."
+                ),
+            },
+            location="kitchen"
+        ),
+        "kitchen_shelves": Entity(
+            eid="kitchen_shelves",
+            name="the shelves",
+            aliases=["shelves", "shelf", "kitchen shelves", "pots",
+                     "earthenware", "implements"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "Wooden shelves still holding a scatter of earthenware "
+                    "storage jars and rusted kitchen implements. The tin of "
+                    "cat food stands out as clearly more recent."
+                ),
+            },
+            location="kitchen"
         ),
     }
 
