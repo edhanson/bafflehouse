@@ -63,9 +63,12 @@ def get_npc_instances(world: World) -> dict:
                 defn     = defn,
                 location = defn.start_room,
             )
-            # Sync entity location in world model
+            # Sync entity location in world model and add to room entity list
             if npc_id in world.entities:
                 world.entities[npc_id].location = defn.start_room
+            start_room = world.rooms.get(defn.start_room)
+            if start_room and npc_id not in start_room.entities:
+                start_room.entities.append(npc_id)
     return _NPC_INSTANCES
 
 
@@ -130,7 +133,7 @@ def format_clarification(world: World, clar: dict) -> str:
     return "\n".join(lines)
 
 
-def do_look(world: World) -> str:
+def do_look(world: World, show_npcs: bool = True) -> str:
     """
     Describe the current room.
 
@@ -140,6 +143,10 @@ def do_look(world: World) -> str:
     For rooms that have a desc_lit attribute (currently only the cellar),
     the lit description is used when the player has a lit lamp, so the
     room text and visible entity list are always consistent with each other.
+
+    show_npcs: when False, suppresses the NPC presence line. Set to False
+    on movement so the NPC tick's enters_room message is the sole
+    description of the NPC — avoids doubling up on the same turn.
     """
     room = world.room()
 
@@ -153,10 +160,12 @@ def do_look(world: World) -> str:
 
     visible = visible_entities_for_room(world)
 
-    # Show non-scenery, non-inventory items in the room.
+    # Show non-scenery, non-NPC, non-inventory items in the room.
+    # NPC presence is conveyed by the NPC tick's atmospheric messages.
     visible_non_scenery = [
         eid for eid in visible
         if "scenery" not in world.entity(eid).tags
+        and "npc"     not in world.entity(eid).tags
         and eid not in world.player.inventory
     ]
 
@@ -167,6 +176,45 @@ def do_look(world: World) -> str:
     if visible_non_scenery:
         things = ", ".join(world.entity(eid).name for eid in visible_non_scenery)
         lines.append(f"You see {things}.")
+
+    # Describe any NPCs present in the room — only when the player
+    # explicitly looks.  On movement the NPC tick fires enters_room
+    # messages; showing both would double-describe the NPC.
+    npc_eids = list(dict.fromkeys(
+        eid for eid in visible if "npc" in world.entity(eid).tags
+    ))
+    if npc_eids and show_npcs:
+        from npc_bayesian import trust_to_disposition
+        npc_look_lines = {
+            "cautious": [
+                "{name} is here, watching you from a distance.",
+                "{name} sits very still at the far end of the room.",
+                "{name} is pressed against the wall, watching.",
+            ],
+            "wary": [
+                "{name} is here, keeping its distance.",
+                "{name} watches you from across the room.",
+            ],
+            "neutral": [
+                "{name} is here.",
+                "{name} sits nearby, ignoring you.",
+            ],
+            "friendly": [
+                "{name} is here, tail raised.",
+                "{name} is nearby, watching you with bright eyes.",
+            ],
+            "devoted": [
+                "{name} is here at your side.",
+                "{name} stays close, ears forward.",
+            ],
+        }
+        import random as _random
+        for eid in npc_eids:
+            ent  = world.entity(eid)
+            disp = NPC_MEMORY.disposition(eid)
+            pool = npc_look_lines.get(disp, npc_look_lines["neutral"])
+            name = ent.name.capitalize()
+            lines.append(_random.choice(pool).format(name=name))
 
     exits = ", ".join(sorted(room.exits.keys())) if room.exits else "none"
     lines.append(f"Exits: {exits}.")
@@ -325,7 +373,9 @@ def handle_go(world: World, ir: dict) -> Tuple[str, bool]:
             return "You can't go that way.", False
 
         world.player.location = room.exits[direction]
-        return do_look(world), True
+        # Suppress NPC presence line on movement — the tick's
+        # enters_room message handles it for this turn.
+        return do_look(world, show_npcs=False), True
 
     if iobj in world.entities:
         return traverse_door(world, iobj)
@@ -369,6 +419,33 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     # Special reveal: examining the garden hedges uncovers the catnip.
     # The catnip entity starts with props["visible"] = False; examining
     # the hedges sets it True so the entity becomes findable and takeable.
+    # For NPC entities: append a disposition-sensitive observation that
+    # hints at how to interact without spelling it out explicitly.
+    if "npc" in ent.tags:
+        disposition = NPC_MEMORY.disposition(obj)
+        npc_examine_suffix = {
+            "cautious": (
+                " It is watching the exits as much as it is watching you."
+            ),
+            "wary": (
+                " It holds its ground but keeps you at a measured distance. "
+                "It seems to be waiting to see what you do next."
+            ),
+            "neutral": (
+                " It seems prepared to tolerate your presence, at least for now. "
+                "It shows mild interest in what you're carrying."
+            ),
+            "friendly": (
+                " It is watching you with open curiosity, tail moving slowly."
+            ),
+            "devoted": (
+                " It stays close, alert to everything around you both."
+            ),
+        }
+        suffix = npc_examine_suffix.get(disposition, "")
+        base = ent.props.get("desc", "You see nothing special.")
+        return base + suffix, True
+
     if obj == "garden_hedges" and "catnip" in world.entities:
         catnip = world.entities["catnip"]
         if not catnip.props.get("visible", False):
@@ -922,8 +999,9 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
         # Open the passage: add "west" exit to the hall, and a reciprocal
         # "east" exit would lead back to the cellar top, but we instead route
         # it back to the cellar for simplicity (the foyer route still works).
-        world.rooms["hall_3"].exits["north"] = "cellar_passage"
+        world.rooms["hall_3"].exits["north"]        = "cellar_passage"
         world.rooms["cellar_passage"].exits["south"] = "hall_3"
+        world.rooms["cellar"].exits["north"]        = "cellar_passage"
         world.note_ref([obj])
 
         return (
@@ -1455,6 +1533,57 @@ def handle_call(world: World, ir: dict) -> tuple:
     return handle_call_npc(world, npc, NPC_MEMORY)
 
 
+def handle_attack(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Attack, kick, or otherwise act aggressively toward an entity.
+
+    For NPC targets: records a hostile event, drastically reducing trust.
+    For non-NPC targets: produces a flavour response (combat system TBD).
+    """
+    obj = ir.get("obj")
+
+    if not obj:
+        return "Attack what?", False
+    if obj not in world.entities:
+        return "You don't see that here.", False
+
+    err = require_visible(world, obj)
+    if err:
+        return err, False
+
+    ent = world.entity(obj)
+
+    if "npc" in ent.tags:
+        # Hostile act against an NPC — large trust penalty
+        NPC_MEMORY.record(obj, "player_struck")
+        disp = NPC_MEMORY.disposition(obj)
+        npcs = get_npc_instances(world)
+        npc  = npcs.get(obj)
+        if npc:
+            # NPC flees immediately regardless of disposition
+            from npc import _choose_wander_destination, _move_npc
+            dest = _choose_wander_destination(
+                npc, world, away_from=world.player.location
+            )
+            if dest:
+                _move_npc(npc, dest, world)
+        responses = [
+            f"You kick {ent.name}. It bolts from the room instantly.",
+            f"You strike {ent.name}. It is gone in an instant.",
+            f"You lash out at {ent.name}. It flees without a sound.",
+        ]
+        return narrate(responses), True
+
+    if "scenery" in ent.tags:
+        return f"Attacking {ent.name} accomplishes nothing.", False
+
+    # Non-NPC portable entity — placeholder for future combat
+    return (
+        f"You take a swing at {ent.name}. "
+        "Nothing dramatic happens. (Combat system coming soon.)"
+    ), False
+
+
 # ============================================================
 # Handler dispatch table
 # ============================================================
@@ -1483,6 +1612,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "use":        handle_use,
     "unmount":    handle_unmount,
     "wield":      handle_wield,
+    "attack":     handle_attack,
     "pet":        handle_pet,
     "feed":       handle_feed,
     "offer":      handle_offer,

@@ -55,12 +55,22 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
         "The cat stands and stretches elaborately as you come in.",
     ],
     ("enters_room", "devoted"): [
-        "Jasper is here. He gets up the moment he sees you.",
+        "The cat is here. It gets up the moment it sees you.",
         "The cat pads toward you immediately, weaving between your feet.",
-        "Jasper chirps and comes to meet you at the door.",
+        "The cat makes a small sound and comes to meet you at the door.",
     ],
 
-    # Jasper is already in the same room — ambient presence messages
+    # Cat has just followed the player into a new room (devoted only).
+    # These describe arrival, not a cat already present.
+    ("follows", "devoted"): [
+        "The cat pads in after you a moment later.",
+        "The cat slips through the door behind you.",
+        "A soft sound of paws on stone — the cat has followed you in.",
+        "The cat rounds the doorway and comes to your side.",
+        "The cat trots in and settles near you.",
+    ],
+
+    # Cat is already in the same room — ambient presence messages
     ("ambient", "cautious"): [],   # too scared to produce ambient lines
     ("ambient", "wary"): [
         "The cat shifts position slightly, keeping its eyes on you.",
@@ -77,8 +87,8 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
         "A quiet rumble — the cat is purring.",
     ],
     ("ambient", "devoted"): [
-        "Jasper stays close to your heels.",
-        "Jasper watches the corridor ahead of you.",
+        "The cat stays close to your heels.",
+        "The cat watches the corridor ahead of you.",
         "The cat's ears swivel, tracking sounds further down the hall.",
     ],
 
@@ -92,7 +102,7 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
         "The cat purrs loudly while eating.",
     ],
     ("fed", "devoted"): [
-        "Jasper eats quickly, then immediately returns to your side.",
+        "The cat eats quickly, then immediately returns to your side.",
     ],
     ("catnip", "neutral"): [
         "The cat sniffs the catnip, rolls onto its back, and forgets you exist.",
@@ -107,8 +117,8 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
         "The cat turns its head so you scratch behind its ear.",
     ],
     ("petted", "devoted"): [
-        "Jasper presses his whole weight against your hand.",
-        "Jasper closes his eyes and purrs.",
+        "The cat presses its whole weight against your hand.",
+        "The cat closes its eyes and purrs.",
     ],
     ("pet_rejected", "cautious"): [
         "The cat flattens its ears and backs away.",
@@ -146,8 +156,61 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
         "The cat trots toward you.",
     ],
     ("called", "devoted"): [
-        "Jasper comes immediately.",
-        "Jasper chirps and comes to your side.",
+        "The cat comes immediately.",
+        "The cat makes a small chirping sound and comes to your side.",
+    ],
+
+    # ── Feeding: cautious and wary dispositions ───────────────────────
+    # The cat is still wary but hunger (or curiosity) wins briefly.
+    ("fed", "cautious"): [
+        "The cat darts forward, snatches the food, and retreats to a safe distance.",
+        "The cat takes the food quickly, watching you the entire time.",
+    ],
+    ("fed", "wary"): [
+        "The cat approaches carefully, eats without looking away from you, then retreats.",
+        "The cat eats with one eye on you throughout.",
+        "The cat finishes quickly and steps back.",
+    ],
+
+    # ── Catnip: all reachable dispositions ───────────────────────────
+    ("catnip", "cautious"): [
+        "The cat sniffs the catnip suspiciously, then — against all dignity — rolls.",
+        "Something overrides the cat's caution. It buries its face in the catnip.",
+    ],
+    ("catnip", "wary"): [
+        "The cat's wariness collapses entirely. It rolls, kicks, and forgets you exist.",
+        "Catnip, it turns out, is a more powerful force than suspicion.",
+    ],
+    ("catnip", "devoted"): [
+        "The cat seizes the catnip and rolls ecstatically, purring the entire time.",
+        "Even at this point, the catnip briefly makes it forget you exist.",
+    ],
+
+    # ── Petting: wary and neutral don't allow it but react differently ──
+    ("petted", "cautious"): [
+        "The cat flinches and backs away sharply.",
+    ],
+    ("petted", "wary"): [
+        "The cat tolerates a single brief touch, then moves away.",
+        "The cat allows the contact for a moment, then leans away.",
+    ],
+    ("petted", "neutral"): [
+        "The cat allows it, though it doesn't seem particularly moved.",
+        "The cat remains still for the petting, expression unreadable.",
+    ],
+
+    # ── Pet rejection at higher dispositions (shouldn't normally fire) ─
+    ("pet_rejected", "friendly"): [],   # friendly always accepts petting
+    ("pet_rejected", "devoted"): [],    # devoted always accepts petting
+
+    # ── Offering at higher dispositions ──────────────────────────────
+    ("offered_item", "friendly"): [
+        "The cat sniffs your offering with interest.",
+        "The cat examines it, then bumps your hand.",
+    ],
+    ("offered_item", "devoted"): [
+        "The cat sniffs the offering and presses against your leg.",
+        "The cat examines it carefully, then looks up at you.",
     ],
 }
 
@@ -307,14 +370,36 @@ def npc_tick(
     same_room    = (player_room == npc_room)
     disposition  = memory.disposition(npc.npc_id)
 
-    # ── Devoted: follow the player wherever they go ───────────────────────
+    # ── Devoted: follow the player, with occasional independent wandering ──
+    # Devoted NPCs follow the player to any room, ignoring home_rooms.
+    # A small wander_chance_devoted chance applies each turn so the cat
+    # occasionally drifts into a neighbouring room on its own — this fires
+    # both when the player moves AND when they take in-room actions.
+    WANDER_CHANCE_DEVOTED = 0.05
+
     if disposition == "devoted" and npc.defn.follows_when_devoted:
-        if not same_room and player_room in npc.defn.home_rooms:
+        # Occasional independent wander even when devoted
+        if random.random() < WANDER_CHANCE_DEVOTED:
+            # Pick any adjacent room — no home_rooms restriction when devoted
+            current_room = world.rooms.get(npc.location)
+            if current_room:
+                candidates = list(current_room.exits.values())
+                if candidates:
+                    dest = random.choice(candidates)
+                    _move_npc(npc, dest, world)
+                    npc_room  = dest
+                    same_room = (dest == player_room)
+        elif not same_room:
+            # Follow the player
             _move_npc(npc, player_room, world)
             npc_room  = player_room
             same_room = True
-            # Don't produce an enters_room message here — the player just
-            # moved and the cat arriving is conveyed by the ambient message.
+            # Produce a "follows" message — distinct from enters_room
+            # (which describes finding the cat already present).
+            msg = get_message(npc.npc_id, "follows", "devoted")
+            if msg:
+                messages.append(msg)
+            return messages
 
     # ── Player is in the same room as the NPC ────────────────────────────
     if same_room:
@@ -323,17 +408,31 @@ def npc_tick(
         disposition = memory.disposition(npc.npc_id)   # may have changed
 
         if disposition == "cautious":
-            # Flee — move away from the player's room
-            dest = _choose_wander_destination(npc, world, away_from=player_room)
-            if dest:
-                _move_npc(npc, dest, world)
-                msg = get_message(npc.npc_id, "enters_room", "cautious")
-                if msg:
+            # Flee probabilistically — the closer trust is to the wary
+            # threshold, the less likely the cat is to bolt.  This gives
+            # the player a window to build trust through repeated presence
+            # without the cat being completely unreachable.
+            trust = memory.trust(npc.npc_id)
+            cautious_floor = 0.0
+            wary_threshold = 0.35
+            # flee_chance: 1.0 at trust=0, 0.3 at trust just below wary
+            flee_chance = 1.0 - 0.7 * (trust / wary_threshold)
+            flee_chance = max(0.3, min(1.0, flee_chance))
+
+            if random.random() < flee_chance:
+                dest = _choose_wander_destination(npc, world, away_from=player_room)
+                if dest:
+                    _move_npc(npc, dest, world)
+                    msg = get_message(npc.npc_id, "enters_room", "cautious")
+                    if msg:
+                        messages.append(msg)
+                    if npc.last_room == player_room:
+                        memory.record(npc.npc_id, "player_startled")
+            else:
+                # Stayed — produce a wary-style message to show hesitation
+                msg = get_message(npc.npc_id, "enters_room", "wary")
+                if msg and player_moved:
                     messages.append(msg)
-                # Rapid re-entry penalty: if the player was in the NPC's
-                # last room too, the NPC is being repeatedly startled.
-                if npc.last_room == player_room:
-                    memory.record(npc.npc_id, "player_startled")
             return messages
 
         # Not cautious — stay and produce ambient message (low probability
@@ -375,10 +474,11 @@ def handle_pet_npc(
     if world.player.location != npc.location:
         return f"{npc.display_name.capitalize()} isn't here.", False
 
-    if disposition in ("cautious", "wary", "neutral"):
+    if disposition in ("cautious", "wary"):
+        # Reaching toward a still-wary cat is alarming — small trust penalty.
         memory.record(npc.npc_id, "player_startled")
         msg = get_message(npc.npc_id, "pet_rejected", disposition)
-        return msg or f"{npc.display_name.capitalize()} won't let you.", False
+        return msg or f"{npc.display_name.capitalize()} backs away.", False
 
     memory.record(npc.npc_id, "player_petted")
     msg = get_message(npc.npc_id, "petted", disposition)
@@ -468,7 +568,7 @@ JASPER_EVENTS = {
     **DEFAULT_EVENTS,
     # Jasper-specific overrides — he's more sensitive to being startled
     # than the generic model suggests
-    "player_startled": (0.0, 0.8),
+    "player_startled": (0.0, 0.5),   # Jasper-specific — re-entry after flee
 }
 
 JASPER = NPCDefinition(

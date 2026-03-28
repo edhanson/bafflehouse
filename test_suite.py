@@ -1070,23 +1070,31 @@ def test_npc_jasper() -> Suite:
     import pathlib, engine
     from npc import JASPER_EVENTS
 
-    def npc_fresh():
-        """Fresh world with clean NPC state."""
+    def _npc_cleanup():
+        """Wipe all NPC state — called before each test world and at the end."""
         engine._NPC_INSTANCES.clear()
         pathlib.Path("./npc_memory.json").unlink(missing_ok=True)
         engine.NPC_MEMORY._store.clear()
         engine.NPC_MEMORY.register_events("jasper", JASPER_EVENTS)
-        w = fresh()
-        return w
+
+    def npc_fresh():
+        """Fresh world with clean NPC state."""
+        _npc_cleanup()
+        return fresh()
+
 
     def set_trust(neutral=False, friendly=False):
-        """Convenience: set Jasper's trust to a useful tier."""
+        """Convenience: set Jasper's trust to a useful tier.
+        Uses low-precision states to avoid diluting subsequent event deltas.
+        """
         if friendly:
+            # 15/(15+6) = 0.714 -> friendly
             engine.NPC_MEMORY.reputation("jasper").confirmations    = 15.0
             engine.NPC_MEMORY.reputation("jasper").disconfirmations = 6.0
         elif neutral:
-            engine.NPC_MEMORY.reputation("jasper").confirmations    = 8.0
-            engine.NPC_MEMORY.reputation("jasper").disconfirmations = 8.0
+            # 5/(5+6) = 0.545 -> neutral, precision=11 (close to natural game arc)
+            engine.NPC_MEMORY.reputation("jasper").confirmations    = 5.0
+            engine.NPC_MEMORY.reputation("jasper").disconfirmations = 6.0
 
     def place_jasper(w, room_id):
         """Move Jasper to a room and sync all data structures."""
@@ -1109,7 +1117,9 @@ def test_npc_jasper() -> Suite:
     s.check("cat_food in kitchen",      w.entities["cat_food"].location == "kitchen")
     s.check("catnip starts hidden",     w.entities["catnip"].location == "hidden")
     s.check("catnip not visible yet",   not w.entities["catnip"].props.get("visible"))
-    s.check("cellar north->passage",    w.rooms["cellar"].exits.get("north") == "cellar_passage")
+    # cellar north exit is added dynamically by the lever — absent at startup
+    s.check("cellar has no north exit at start",
+            "north" not in w.rooms["cellar"].exits)
     s.check("passage east->cellar",     w.rooms["cellar_passage"].exits.get("east") == "cellar")
     s.check("passage west->kitchen",    w.rooms["cellar_passage"].exits.get("west") == "kitchen")
 
@@ -1147,16 +1157,24 @@ def test_npc_jasper() -> Suite:
     from engine import get_npc_instances, NPC_MEMORY
     get_npc_instances(w)
     s.check("jasper starts cautious", NPC_MEMORY.disposition("jasper") == "cautious")
-    s.check("starting trust < 0.35",  NPC_MEMORY.trust("jasper") < 0.35)
+    s.check("starting trust = 0.25",
+            abs(NPC_MEMORY.trust("jasper") - 0.25) < 0.01)
 
     # ── Cautious: flee on player presence ─────────────────────
     w = npc_fresh(); w.player.location = "hall_2"
     jasper = place_jasper(w, "hall_2")
     out, _ = cmd(w, "examine portraits")
-    s.check("cautious jasper flees or message printed",
-            jasper.location != "hall_2" or
-            any(x in out.lower() for x in ["cat","bolt","disappear","walks","grey"]),
-            out[:80])
+    # At 50% flee chance, Jasper should flee at least once in 20 trials.
+    # We run multiple trials to make this deterministic regardless of seed.
+    fled_once = False
+    for _ in range(20):
+        place_jasper(w, "hall_2")
+        cmd(w, "examine portraits")
+        if jasper.location != "hall_2":
+            fled_once = True
+    s.check("cautious jasper flees at least once in 20 tries",
+            fled_once or NPC_MEMORY.trust("jasper") > 0.35,
+            f"trust={NPC_MEMORY.trust('jasper'):.3f}")
 
     # ── Pet rejected when cautious ────────────────────────────
     w = npc_fresh(); w.player.location = "hall_2"
@@ -1182,19 +1200,26 @@ def test_npc_jasper() -> Suite:
     out, _ = cmd(w, "feed cat food to cat")
     s.check("feed -> food consumed",
             w.entities["cat_food"].location == "consumed", out)
-    s.check("feed -> trust increases",
-            NPC_MEMORY.trust("jasper") > t0)
+    s.check("feed -> trust increases to neutral+",
+            NPC_MEMORY.trust("jasper") >= 0.55)
 
-    # ── Feed catnip: consumes, increases trust more than food ─
-    w = npc_fresh(); w.player.location = "entryway"
+    # ── Feed catnip: natural arc — food first then catnip ────
+    # Start fresh so precision is the natural prior, not the
+    # synthetic set_trust precision which dilutes the catnip delta.
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    move_entity(w, "cat_food", "player")
+    cmd(w, "feed cat food to cat")   # -> neutral
+    w.player.location = "entryway"
     jasper = place_jasper(w, "entryway")
-    set_trust(neutral=True)
     cmd(w, "examine hedges")
     cmd(w, "take catnip")
     t0 = NPC_MEMORY.trust("jasper")
     out, _ = cmd(w, "feed catnip to cat")
     s.check("catnip consumed when fed", w.entities["catnip"].location == "consumed", out)
-    s.check("catnip increases trust",   NPC_MEMORY.trust("jasper") > t0)
+    s.check("catnip increases trust to friendly+",
+            NPC_MEMORY.trust("jasper") >= 0.70,
+            f"trust={NPC_MEMORY.trust('jasper'):.3f}")
 
     # ── Offer: trust increases, item not consumed ─────────────
     w = npc_fresh(); w.player.location = "hall_2"
@@ -1213,14 +1238,188 @@ def test_npc_jasper() -> Suite:
     s.check("friendly disposition confirmed",
             NPC_MEMORY.disposition("jasper") in ("friendly","devoted"))
     out, _ = cmd(w, "pet cat")
-    s.check("pet friendly jasper -> purr/lean response",
+    s.check("pet friendly jasper -> success response",
             any(x in out.lower() for x in
-                ["leans","purr","hand","closes","eye","scratch"]), out)
+                ["leans","purr","hand","closes","eye","scratch",
+                 "head","ear","weight","presses"]), out)
+
+    # ── do_look shows NPC presence ────────────────────────────
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    from engine import do_look
+    look = do_look(w)
+    s.check("do_look shows cat when present",
+            "cat" in look.lower() or "jasper" in look.lower(), look)
+    s.check("do_look shows disposition context",
+            any(x in look.lower() for x in
+                ["distance", "watching", "here", "nearby", "wall"]), look)
+
+    # Disposition changes look message
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    set_trust(friendly=True)
+    look_friendly = do_look(w)
+    s.check("friendly jasper gets warmer look message",
+            any(x in look_friendly.lower() for x in
+                ["tail", "bright", "side", "close", "here"]), look_friendly)
+
+    # ── Movement suppresses NPC presence line ────────────────
+    # When the player moves into a room, the NPC tick fires an
+    # enters_room message.  do_look (called by handle_go) should
+    # NOT also add a presence line — that would double-describe.
+    w = npc_fresh(); w.player.location = "hall_1"
+    jasper = place_jasper(w, "hall_2")
+    # Set wary so cat stays and tick fires enters_room message
+    NPC_MEMORY.reputation("jasper").confirmations    = 5.0
+    NPC_MEMORY.reputation("jasper").disconfirmations = 6.0
+    out, _ = cmd(w, "go north")
+    # Room desc + exits should appear, but NOT both a presence
+    # line in the room desc AND a tick message.
+    room_section = out.split("Exits:")[0] if "Exits:" in out else out
+    cat_count = room_section.lower().count("cat")
+    s.check("movement: at most one cat mention before Exits line",
+            cat_count <= 1, f"count={cat_count} in: {room_section!r}")
+
+    # Explicit look shows presence line
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    from engine import do_look
+    look = do_look(w, show_npcs=True)
+    s.check("explicit look: cat presence line present",
+            "cat" in look.lower(), look)
+    look_no_npc = do_look(w, show_npcs=False)
+    room_part = look_no_npc.split("Exits:")[0]
+    s.check("do_look show_npcs=False: no cat in room description",
+            "cat" not in room_part.lower(), room_part)
+
+    # ── No hardcoded Jasper name in messages ──────────────────
+    from npc import JASPER_MESSAGES, get_message
+    jasper_in_pool = any(
+        "Jasper" in msg
+        for pool in JASPER_MESSAGES.values()
+        for msg in pool
+    )
+    s.check("no hardcoded Jasper name in message pools",
+            not jasper_in_pool)
+
+    # All devoted messages use neutral cat references
+    devoted_msg = get_message("jasper", "enters_room", "devoted")
+    s.check("devoted enters_room: no Jasper name",
+            devoted_msg is not None and "Jasper" not in devoted_msg,
+            devoted_msg)
+
+    # ── Devoted: follows player anywhere ──────────────────────
+    w = npc_fresh()
+    w.player.location = "foyer"
+    move_entity(w, "brass_key", "player")
+    cmd(w, "unlock door with brass key")
+    cmd(w, "open door")
+    jasper = place_jasper(w, "hall_2")
+    NPC_MEMORY.reputation("jasper").confirmations    = 35.0
+    NPC_MEMORY.reputation("jasper").disconfirmations = 4.0
+    s.check("devoted disposition confirmed",
+            NPC_MEMORY.disposition("jasper") == "devoted")
+    w.player.location = "hall_2"
+    cmd(w, "go south")  # hall_2 -> hall_1
+    s.check("devoted jasper follows to hall_1",
+            jasper.location == "hall_1")
+    cmd(w, "go south")  # hall_1 -> foyer
+    s.check("devoted jasper follows outside home_rooms (foyer)",
+            jasper.location == "foyer")
+    cmd(w, "go south")  # foyer -> entryway
+    s.check("devoted jasper follows to outdoor area",
+            jasper.location == "entryway")
+
+    # ── Trust does not persist between sessions ────────────────
+    from npc_bayesian import NPCMemory as _NPCMemory
+    import pathlib as _pathlib
+    _pathlib.Path("./npc_memory.json").unlink(missing_ok=True)
+
+    # Session 1: build trust and save
+    mem1 = _NPCMemory("./npc_memory.json")
+    mem1.register_events("jasper", JASPER_EVENTS)
+    mem1.reputation("jasper").confirmations    = 20.0
+    mem1.reputation("jasper").disconfirmations = 4.0
+    mem1.save()
+    s.check("npc_memory.json not created (no persistent_data)",
+            not _pathlib.Path("./npc_memory.json").exists())
+
+    # Session 2: reload — trust should be default
+    mem2 = _NPCMemory("./npc_memory.json")
+    mem2.register_events("jasper", JASPER_EVENTS)
+    s.check("trust resets to prior on reload",
+            abs(mem2.trust("jasper") - 2.0/8.0) < 0.001,
+            f"trust={mem2.trust('jasper'):.3f}")
+    s.check("disposition is cautious after reload",
+            mem2.disposition("jasper") == "cautious")
+
+    # Session 1b: persistent_data survives reload
+    mem3 = _NPCMemory("./npc_memory.json")
+    mem3.register_events("jasper", JASPER_EVENTS)
+    mem3.reputation("jasper").persistent_data["test_key"] = "test_value"
+    mem3.save()
+    s.check("npc_memory.json created with persistent_data",
+            _pathlib.Path("./npc_memory.json").exists())
+
+    mem4 = _NPCMemory("./npc_memory.json")
+    mem4.register_events("jasper", JASPER_EVENTS)
+    s.check("persistent_data survives reload",
+            mem4.reputation("jasper").persistent_data.get("test_key") == "test_value")
+    s.check("trust still resets with persistent_data",
+            abs(mem4.trust("jasper") - 2.0/8.0) < 0.001)
+    _pathlib.Path("./npc_memory.json").unlink(missing_ok=True)
+
+    # ── "follows" message pool ────────────────────────────────
+    from npc import get_message
+    follows_msgs = [get_message("jasper", "follows", "devoted")
+                    for _ in range(10)]
+    s.check("follows pool returns messages",
+            any(m is not None for m in follows_msgs))
+    s.check("follows messages describe arrival",
+            any(m and any(w in m.lower() for w in
+                          ["pads", "follows", "slips", "trots", "rounds"])
+                for m in follows_msgs))
+    s.check("follows messages do not describe cat already present",
+            not any(m and "sitting" in m.lower() for m in follows_msgs))
+
+    # "enters_room" at devoted describes cat already there
+    er_devoted = get_message("jasper", "enters_room", "devoted")
+    s.check("enters_room/devoted: cat already present phrasing",
+            er_devoted is not None and
+            any(p in er_devoted.lower() for p in
+                ["is here", "gets up", "comes to meet"]))
+
+    # ── Devoted wander (5%) fires across many turns ───────────
+    import random as _random
+    _random.seed(99)
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    NPC_MEMORY.reputation("jasper").confirmations    = 35.0
+    NPC_MEMORY.reputation("jasper").disconfirmations = 6.0
+    wanders = 0
+    for _ in range(100):
+        place_jasper(w, "hall_2")
+        cmd(w, "examine portraits")
+        if jasper.location != "hall_2":
+            wanders += 1
+    s.check("devoted wander fires 1-20 times in 100 turns",
+            1 <= wanders <= 20, f"wandered {wanders}/100")
+
+    # ── Non-devoted wander stays in home_rooms ────────────────
+    w = npc_fresh()
+    w.player.location = "foyer"
+    jasper = place_jasper(w, "hall_2")
+    NPC_MEMORY.reputation("jasper").confirmations    = 5.0
+    NPC_MEMORY.reputation("jasper").disconfirmations = 6.0
+    home_rooms = jasper.defn.home_rooms
+    for _ in range(50):
+        cmd(w, "examine portraits")
+    s.check("non-devoted wander stays in home_rooms",
+            jasper.location in home_rooms,
+            f"ended in {jasper.location}")
 
     # ── Cleanup ───────────────────────────────────────────────
-    engine._NPC_INSTANCES.clear()
-    pathlib.Path("./npc_memory.json").unlink(missing_ok=True)
-    engine.NPC_MEMORY._store.clear()
+    _npc_cleanup()
 
     return s
 

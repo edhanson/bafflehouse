@@ -174,7 +174,7 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
     # LIGHT — sets "lit": True on a "lightable" entity (requires "fuelled": True).
     "light": VerbDefinition(
         verb_id="light",
-        literal_forms=["light", "ignite", "kindle", "illuminate", "turn on", "strike"],
+        literal_forms=["light", "ignite", "kindle", "illuminate", "turn on"],
         semantic_examples=[
             "light a candle",
             "light a lamp",
@@ -338,6 +338,21 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
                        "speak", "talk"],
         semantic_examples=[
             "call to the cat", "speak to a creature", "whistle for an animal",
+        ],
+        shape="verb_obj",
+    ),
+
+    # ATTACK/KICK — hostile action against an NPC or object.
+    # Routes to handle_attack in engine; for NPCs this damages trust.
+    "attack": VerbDefinition(
+        verb_id="attack",
+        literal_forms=["attack", "kick", "hit", "strike", "punch",
+                       "shove", "smack", "slap", "hurt", "harm",
+                       "beat", "whack", "throw at"],
+        semantic_examples=[
+            "attack a creature",
+            "kick something",
+            "hit an enemy",
         ],
         shape="verb_obj",
     ),

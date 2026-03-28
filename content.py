@@ -199,10 +199,10 @@ def build_demo_world() -> World:
             title="Cellar Passage",
             desc=(
                 "A low stone passage running east-west, smelling of damp and old "
-                "wood. To the east, steps descend to the wine cellar. To the west "
-                "a door stands open onto what was once the kitchen. Pale light "
-                "filters down from the hall above through the newly opened gap "
-                "to the south."
+                "wood. Pale light falls from an opening in the ceiling to the south, "
+                "leading up to the hall above. Steps to the east descend to the "
+                "wine cellar. A door to the west stands open onto what was once "
+                "the kitchen."
             ),
             exits={"east": "cellar", "west": "kitchen"}
             # NOTE: "south" to hall_3 added dynamically by lever puzzle.
@@ -219,7 +219,8 @@ def build_demo_world() -> World:
                 "room is impenetrably dark — you can tell something is there but cannot "
                 "make it out. The foyer is back up the stairs to the east."
             ),
-            exits={"east": "foyer", "north": "cellar_passage"}
+            exits={"east": "foyer"}
+            # NOTE: "north" to cellar_passage added dynamically by lever puzzle.
         ),
     }
 
@@ -1026,6 +1027,10 @@ def build_demo_world() -> World:
     #   - location is "hidden"   -> leave out of everything (invisible)
     # ----------------------------------------------------------
     for ent in entities.values():
+        # NPC entities are placed at runtime by get_npc_instances();
+        # skip them here to avoid pre-populating room.entities.
+        if "npc" in ent.tags:
+            continue
         if ent.location in rooms:
             rooms[ent.location].entities.append(ent.eid)
         elif ent.location in entities:

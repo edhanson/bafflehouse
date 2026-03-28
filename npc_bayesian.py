@@ -56,15 +56,15 @@ DEFAULT_EVENTS: Dict[str, Tuple[float, float]] = {
     "player_present":        (0.3,  0.0),   # player in same room (per move)
 
     # Offerings and gifts
-    "player_offered_item":   (0.5,  0.0),
-    "player_gave_food":      (2.0,  0.0),
-    "player_gave_catnip":    (1.5,  0.0),
+    "player_offered_item":   (1.0,  0.0),   # small nudge
+    "player_gave_food":      (6.0,  0.0),   # wary -> neutral
+    "player_gave_catnip":    (8.0,  0.0),   # neutral -> friendly
 
     # Physical interaction
-    "player_petted":         (1.0,  0.0),
+    "player_petted":         (10.0, 0.0),   # friendly -> devoted (2 pets)
 
     # Hostile actions
-    "player_struck":         (0.0,  6.0),
+    "player_struck":         (0.0, 12.0),   # major hostile act
     "player_startled":       (0.0,  0.5),   # rapid re-entry after fleeing
 
     # Neutral context
@@ -81,13 +81,18 @@ class BayesianReputation:
     disconfirmations — weight of negative evidence (increments beta)
     interactions     — total events recorded (diagnostic)
     events           — per-NPC event table (confirm_delta, disconfirm_delta)
+    persistent_data  — arbitrary key/value store for behaviours that DO
+                       persist between sessions (room preferences, learned
+                       responses, etc.).  Trust parameters do NOT persist.
     """
-    confirmations:    float = 4.0
-    disconfirmations: float = 8.0
+    confirmations:    float = 2.0
+    disconfirmations: float = 6.0
     interactions:     int   = 0
     events: Dict[str, Tuple[float, float]] = field(
         default_factory=lambda: dict(DEFAULT_EVENTS)
     )
+    persistent_data: Dict = field(default_factory=dict)
+
 
     @property
     def trust(self) -> float:
@@ -127,9 +132,9 @@ class BayesianReputation:
         n = c + d
         current_var = (c * d) / (n * n * (n + 1))
 
-        # Variance of the starting prior Beta(4, 8)
-        # = (4 * 8) / (12^2 * 13) = 32 / 1872 ≈ 0.01709
-        prior_var = (4.0 * 8.0) / (144.0 * 13.0)
+        # Variance of the starting prior Beta(2, 6)
+        # = (2 * 6) / (8^2 * 9) = 12 / 576 ≈ 0.02083
+        prior_var = (2.0 * 6.0) / (64.0 * 9.0)
 
         return min(1.0, current_var / prior_var)
 
@@ -154,21 +159,34 @@ class BayesianReputation:
         self.interactions     += 1
 
     def to_dict(self) -> dict:
+        """
+        Serialise only the data that should persist between sessions.
+
+        Trust parameters (confirmations, disconfirmations) are intentionally
+        excluded — the player must re-earn an NPC's trust each run.
+        Persistent behavioural data (room preferences, learned responses)
+        is included once it exists.
+        """
         return {
-            "confirmations":    self.confirmations,
-            "disconfirmations": self.disconfirmations,
-            "interactions":     self.interactions,
-            # events table is not persisted — it is set at NPC construction
-            # time from the NPC definition, not from save data.
+            # Trust is NOT saved — resets each session.
+            # "confirmations":    self.confirmations,
+            # "disconfirmations": self.disconfirmations,
+            "persistent_data": self.persistent_data,
         }
 
     @classmethod
     def from_dict(cls, data: dict, events: Optional[Dict] = None) -> "BayesianReputation":
+        """
+        Restore from saved data.  Trust starts fresh (default prior).
+        Only persistent_data is restored from disk.
+        """
         return cls(
-            confirmations    = data.get("confirmations",    4.0),
-            disconfirmations = data.get("disconfirmations", 8.0),
-            interactions     = data.get("interactions",     0),
+            # Trust always starts at the default prior — not restored.
+            confirmations    = 2.0,
+            disconfirmations = 6.0,
+            interactions     = 0,
             events           = events if events is not None else dict(DEFAULT_EVENTS),
+            persistent_data  = data.get("persistent_data", {}),
         )
 
 
@@ -197,9 +215,27 @@ class NPCMemory:
             pass  # corrupt save — start fresh
 
     def save(self) -> None:
-        """Persist all NPC reputations to disk."""
-        raw = {nid: rep.to_dict() for nid, rep in self._store.items()}
-        self.save_path.write_text(json.dumps(raw, indent=2))
+        """
+        Persist NPC data to disk.
+
+        Only writes the file when at least one NPC has non-empty
+        persistent_data — trust is session-only and is never saved.
+        If nothing is worth persisting, any existing file is removed
+        so the next session starts completely clean.
+        """
+        data = {}
+        for nid, rep in self._store.items():
+            d = rep.to_dict()
+            # Only include NPCs that have something persistent to save.
+            if d.get("persistent_data"):
+                data[nid] = d
+
+        if data:
+            self.save_path.write_text(json.dumps(data, indent=2))
+        else:
+            # Nothing worth saving — remove any stale file from last run.
+            if self.save_path.exists():
+                self.save_path.unlink()
 
     def register_events(self, npc_id: str, events: Dict[str, Tuple[float, float]]) -> None:
         """
