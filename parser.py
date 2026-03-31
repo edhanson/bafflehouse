@@ -664,6 +664,58 @@ def rewrite_interaction_idioms(text: str) -> str:
         (r"^apply\s+(.+)\s+to\s+(.+)$",         r"use \1 with \2"),
         (r"^use\s+(.+)\s+on\s+(.+)$",           r"use \1 with \2"),
 
+        # EXAMINE idioms
+        (r"^look\s+inside\s+(.+)$",              r"examine \1"),
+        (r"^look\s+in\s+(.+)$",                  r"examine \1"),
+        (r"^peer\s+inside\s+(.+)$",              r"examine \1"),
+        (r"^peer\s+into\s+(.+)$",                r"examine \1"),
+
+        # TAKE idioms
+        (r"^pick\s+(.+)\s+up$",                  r"take \1"),
+        (r"^pick\s+up\s+the\s+(.+)$",           r"take \1"),
+        (r"^take\s+(.+)\s+with\s+(me|you)$",   r"take \1"),
+        (r"^bring\s+(.+)\s+with\s+(me|you)$",  r"take \1"),
+        (r"^grab\s+hold\s+of\s+(.+)$",          r"take \1"),
+
+        # OPEN / CLOSE with optional with-clause
+        (r"^open\s+up\s+(.+)$",                  r"open \1"),
+        (r"^open\s+(.+?)\s+up$",                 r"open \1"),
+        (r"^close\s+up\s+(.+)$",                 r"close \1"),
+        (r"^shut\s+(.+?)\s+(?:closed|tight)$",  r"close \1"),
+
+        # GO idioms
+        (r"^go\s+to\s+the\s+(.+)$",             r"go \1"),
+        (r"^go\s+to\s+(.+)$",                    r"go \1"),
+        (r"^make\s+(?:my|your)\s+way\s+(.+)$", r"go \1"),
+        (r"^head\s+(?:for|to)\s+(.+)$",         r"go \1"),
+
+        # UNLOCK with key given first
+        (r"^use\s+(.+?)\s+to\s+unlock\s+(.+)$", r"unlock \2 with \1"),
+        (r"^use\s+(.+?)\s+to\s+open\s+(.+)$",   r"open \2 with \1"),
+        (r"^use\s+(.+?)\s+to\s+lock\s+(.+)$",   r"lock \2 with \1"),
+
+        # DROP idioms
+        (r"^put\s+down\s+(.+)$",                 r"drop \1"),
+        (r"^set\s+down\s+(.+)$",                 r"drop \1"),
+        (r"^lay\s+down\s+(.+)$",                 r"drop \1"),
+        (r"^leave\s+(.+)\s+here$",               r"drop \1"),
+
+        # READ idioms
+        (r"^read\s+through\s+(.+)$",             r"read \1"),
+        (r"^read\s+over\s+(.+)$",                r"read \1"),
+        (r"^look\s+through\s+(.+)$",             r"read \1"),
+
+        # DRINK / EAT idioms
+        (r"^take\s+a\s+sip\s+of\s+(.+)$",     r"drink \1"),
+        (r"^take\s+a\s+drink\s+of\s+(.+)$",   r"drink \1"),
+        (r"^take\s+a\s+bite\s+of\s+(.+)$",    r"eat \1"),
+        (r"^take\s+a\s+taste\s+of\s+(.+)$",   r"eat \1"),
+
+        # ATTACK idioms
+        (r"^throw\s+(.+?)\s+at\s+(.+)$",       r"attack \2 with \1"),
+        (r"^swing\s+(.+?)\s+at\s+(.+)$",       r"attack \2 with \1"),
+        (r"^hit\s+(.+?)\s+with\s+(.+)$",       r"attack \1 with \2"),
+
         # LIGHT: strip trailing "with <fire-source>" phrasing.
         # "light lamp with matches" / "light lamp with a match" should
         # behave identically to "light lamp" — the fire source is found
@@ -916,6 +968,27 @@ _PREAMBLE_REWRITES = [
     (r"^i\s+will\s+(.+)$",                   r"\1"),
     (r"^i'll\s+(.+)$",                       r"\1"),
     (r"^maybe\s+(.+)$",                       r"\1"),
+    (r"^i\s+should\s+(.+)$",                 r"\1"),
+    (r"^i\s+need\s+to\s+(.+)$",             r"\1"),
+    (r"^i\s+ought\s+to\s+(.+)$",            r"\1"),
+    (r"^i\s+must\s+(.+)$",                   r"\1"),
+    (r"^i\s+think\s+i\s+should\s+(.+)$",  r"\1"),
+    (r"^i\s+think\s+i\s+will\s+(.+)$",    r"\1"),
+    (r"^i\s+am\s+going\s+to\s+(.+)$",     r"\1"),
+    (r"^i\s+m\s+going\s+to\s+(.+)$",      r"\1"),
+    (r"^i\s+suppose\s+i\s+should\s+(.+)$",r"\1"),
+    (r"^suppose\s+i\s+(.+)$",                r"\1"),
+    (r"^now\s+(.+)$",                          r"\1"),
+    (r"^first\s+(.+)$",                        r"\1"),
+    (r"^quickly\s+(.+)$",                      r"\1"),
+    (r"^carefully\s+(.+)$",                    r"\1"),
+    (r"^slowly\s+(.+)$",                       r"\1"),
+    (r"^ok\s+(.+)$",                           r"\1"),
+    (r"^okay\s+(.+)$",                         r"\1"),
+    (r"^well\s+(.+)$",                         r"\1"),
+    (r"^right\s+(.+)$",                        r"\1"),
+    (r"^alright\s+(.+)$",                      r"\1"),
+    (r"^next\s+(.+)$",                         r"\1"),
 ]
 
 
@@ -1070,6 +1143,171 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "slink":       "go",
     "creep":       "go",
     "sneak":       "go",
+    "make your way": "go",
+    "make my way":   "go",
+    "head toward":   "go",
+    "head towards":  "go",
+    "go toward":     "go",
+    "go towards":    "go",
+
+    # take-family (additional)
+    "take hold of": "take",
+    "pick off":     "take",
+    "take up":      "take",
+    "scoop up":     "take",
+    "scoop":        "take",
+    "gather":       "take",
+    "claim":        "take",
+    "pluck":        "take",
+    "snag":         "take",
+
+    # drop-family (additional)
+    "put aside":    "drop",
+    "set aside":    "drop",
+    "lay down":     "drop",
+    "leave behind": "drop",
+
+    # examine-family (additional)
+    "look over":    "examine",
+    "look closely": "examine",
+    "take stock of":"examine",
+    "investigate":  "examine",
+    "inspect":      "examine",
+    "appraise":     "examine",
+    "eye":          "examine",
+    "peek at":      "examine",
+    "glance at":    "examine",
+
+    # open-family (additional)
+    "push open":    "open",
+    "pull open":    "open",
+    "slide open":   "open",
+    "swing":        "open",
+
+    # close-family
+    "slam":         "close",
+    "close up":     "close",
+    "close off":    "close",
+    "seal":         "close",
+    "seal up":      "close",
+
+    # lock-family (additional)
+    "deadbolt":     "lock",
+
+    # unlock-family (additional)
+    "unbar":        "unlock",
+    "unlock with":  "unlock",
+
+    # push-family (additional)
+    "lean on":      "push",
+    "lean against": "push",
+    "push against": "push",
+    "press against":"push",
+
+    # pull-family (additional)
+    "tug at":       "pull",
+    "pull at":      "pull",
+    "yank at":      "pull",
+    "grab at":      "pull",
+
+    # read-family (additional)
+    "read through": "read",
+    "read over":    "read",
+    "study":        "read",
+    "pore over":    "read",
+    "glance through": "read",
+
+    # wear-family (additional)
+    "put on":       "wear",
+    "try on":       "wear",
+    "fit":          "wear",
+
+    # remove-family
+    "take off":     "remove",
+    "pull off":     "remove",
+    "strip off":    "remove",
+    "unequip":      "remove",
+    "doff":         "remove",
+
+    # light-family (additional)
+    "fire up":      "light",
+    "touch off":    "light",
+    "start":        "light",
+
+    # extinguish-family (additional)
+    "stamp out":    "extinguish",
+    "quench":       "extinguish",
+    "damp down":    "extinguish",
+
+    # fill-family
+    "fill up":      "fill",
+    "refill":       "fill",
+    "top off":      "fill",
+    "load up":      "fill",
+
+    # pour-family (additional)
+    "dump":         "pour",
+    "transfer":     "pour",
+    "tip":          "pour",
+
+    # put-family (additional)
+    "drop into":    "put",
+    "drop in":      "put",
+    "place in":     "put",
+    "place into":   "put",
+    "put into":     "put",
+    "put in":       "put",
+    "insert into":  "put",
+    "shove into":   "put",
+    "stuff into":   "put",
+    "stuff in":     "put",
+    "pack":         "put",
+
+    # use-family (additional)
+    "operate":      "use",
+    "activate":     "use",
+    "work":         "use",
+
+    # pet-family (additional)
+    "tickle":       "pet",
+    "poke":         "pet",
+    "fuss over":    "pet",
+    "fuss":         "pet",
+
+    # feed-family
+    "give":         "feed",
+    "hand":         "feed",
+    "pass":         "feed",
+
+    # offer-family
+    "show":         "offer",
+    "wave":         "offer",
+    "dangle":       "offer",
+
+    # drink-family
+    "sip":          "drink",
+    "sample":       "drink",
+
+    # eat-family (additional)
+    "ingest":       "eat",
+    "swallow":      "eat",
+
+    # call-family (additional)
+    "address":      "call",
+    "yell at":      "call",
+    "shout at":     "call",
+    "shout to":     "call",
+    "whisper to":   "call",
+    "say to":       "call",
+
+    # attack-family (additional)
+    "strike at":    "attack",
+    "swing at":     "attack",
+    "lash out at":  "attack",
+    "hit at":       "attack",
+    "lunge at":     "attack",
+    "charge at":    "attack",
+    "charge":       "attack",
 }
 
 # Pre-sort synonym keys by length descending so longer phrases match first.
