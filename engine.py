@@ -76,6 +76,48 @@ def get_npc_instances(world: World) -> dict:
 # Visibility helpers
 # ============================================================
 
+def phrase_in_room_text(world: World, phrase: str) -> bool:
+    """
+    Return True if every normalised token of *phrase* appears in the
+    combined text that the player can currently see: the room description
+    (including desc_lit when lit) plus the description of every scenery
+    entity in the room.
+
+    Used to distinguish "you don't see that here" (no match) from
+    "nothing special about it" (phrase appears in descriptive text but
+    has no dedicated entity).  Avoids the need to exhaustively enumerate
+    every colour-noun in the game world.
+    """
+    import re
+    def _norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9 ]", "", s.lower())
+
+    tokens = [t for t in _norm(phrase).split() if t]
+    if not tokens:
+        return False
+
+    room = world.room()
+
+    # Collect all visible descriptive text
+    texts: list = []
+    if hasattr(room, "desc_lit") and player_has_lit_lamp(world):
+        texts.append(room.desc_lit)
+    else:
+        texts.append(room.desc)
+
+    # Include scenery entity descriptions — players read these and
+    # may refer to nouns they contain.
+    for eid in room.entities:
+        ent = world.entities.get(eid)
+        if ent and "scenery" in ent.tags:
+            texts.append(ent.props.get("desc", ""))
+            texts.append(ent.name)
+
+    combined = _norm(" ".join(texts))
+    return all(t in combined for t in tokens)
+
+
+
 def player_has_lit_lamp(world: World) -> bool:
     """
     Return True if the player is carrying the oil lamp and it is currently lit.
@@ -407,6 +449,10 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     if not obj:
         return "Examine what?", False
     if obj not in world.entities:
+        # obj is the raw ungrounded phrase — check if it appears in the
+        # current room's visible text before denying existence outright.
+        if phrase_in_room_text(world, str(obj)):
+            return "You notice nothing special about it.", True
         return "You don't see that here.", False
 
     err = require_visible(world, obj)
@@ -521,6 +567,8 @@ def handle_take(world: World, ir: dict) -> Tuple[str, bool]:
     if not obj:
         return "Take what?", False
     if obj not in world.entities:
+        if phrase_in_room_text(world, str(obj)):
+            return "That's not something you can pick up.", False
         return "You don't see that here.", False
 
     err = require_visible(world, obj)
@@ -760,6 +808,8 @@ def handle_read(world: World, ir: dict) -> Tuple[str, bool]:
     if not obj:
         return "Read what?", False
     if obj not in world.entities:
+        if phrase_in_room_text(world, str(obj)):
+            return "There's nothing there to read.", False
         return "You don't see that here.", False
 
     err = require_visible(world, obj)
@@ -924,6 +974,8 @@ def handle_push(world: World, ir: dict) -> Tuple[str, bool]:
     if not obj:
         return "Push what?", False
     if obj not in world.entities:
+        if phrase_in_room_text(world, str(obj)):
+            return "That's not something you can push.", False
         return "You don't see that here.", False
 
     err = require_visible(world, obj)
@@ -954,6 +1006,8 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
     if not obj:
         return "Pull what?", False
     if obj not in world.entities:
+        if phrase_in_room_text(world, str(obj)):
+            return "That's not something you can pull.", False
         return "You don't see that here.", False
 
     err = require_visible(world, obj)

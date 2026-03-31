@@ -1425,6 +1425,83 @@ def test_npc_jasper() -> Suite:
 
 
 # ============================================================
+# SECTION 11 — Descriptive-noun fallback  [symbolic]
+# ============================================================
+
+def test_descriptive_noun_fallback() -> Suite:
+    s = Suite("SECTION 11 — Descriptive-noun fallback")
+
+    # ── phrase_in_room_text utility ───────────────────────────────
+    from engine import phrase_in_room_text
+
+    w = fresh()
+    w.player.location = "entryway"
+    s.check("overgrowth found in entryway desc",
+            phrase_in_room_text(w, "overgrowth"))
+    s.check("flagstones found in entryway desc",
+            phrase_in_room_text(w, "flagstones"))
+    s.check("roots found in entryway desc",
+            phrase_in_room_text(w, "roots"))
+    s.check("dragon not found in entryway desc",
+            not phrase_in_room_text(w, "dragon"))
+    s.check("random not found in entryway desc",
+            not phrase_in_room_text(w, "random word xyz"))
+
+    w2 = fresh(); w2.player.location = "foyer"
+    s.check("chandelier found in foyer (scenery entity name)",
+            phrase_in_room_text(w2, "chandelier"))
+
+    # ── examine: soft response for descriptive nouns ──────────────
+    w = fresh(); w.player.location = "entryway"
+    out, ok = cmd(w, "examine overgrowth")
+    s.check("examine overgrowth: soft response (not hard denial)",
+            "don't see" not in out.lower(), out)
+    s.check("examine overgrowth: no pending clarification",
+            ok is None)
+
+    w = fresh(); w.player.location = "entryway"
+    out, _ = cmd(w, "examine roots")
+    s.check("examine roots: soft response", "don't see" not in out.lower(), out)
+
+    # ── examine: genuine missing entity still hard-denies ─────────
+    w = fresh(); w.player.location = "entryway"
+    out, ok = cmd(w, "examine dragon")
+    s.check("examine dragon: hard denial", "don't see" in out.lower(), out)
+    s.check("examine dragon: not consumed (False)", not ok)
+
+    # ── take: soft response for descriptive nouns ─────────────────
+    w = fresh(); w.player.location = "entryway"
+    out, ok = cmd(w, "take overgrowth")
+    s.check("take overgrowth: soft response",
+            "don't see" not in out.lower() and len(out) > 0, out)
+    s.check("take overgrowth: not consumed", not ok)
+
+    w = fresh(); w.player.location = "entryway"
+    out, _ = cmd(w, "take dragon")
+    s.check("take dragon: hard denial", "don't see" in out.lower(), out)
+
+    # ── Real entities still examined normally ─────────────────────
+    w = fresh(); w.player.location = "entryway"
+    out, ok = cmd(w, "examine hedges")
+    s.check("examine hedges (real entity): desc returned",
+            "hedge" in out.lower() or "ornamental" in out.lower(), out)
+    s.check("examine hedges: no pending clarification", ok is None)
+
+    # ── push/pull: soft response for descriptive nouns ────────────
+    w = fresh(); w.player.location = "entryway"
+    out, ok = cmd(w, "push flagstones")
+    # flagstones is a real entity so will get entity response, not soft
+    # but overgrowth is not an entity so should get soft
+    w2 = fresh(); w2.player.location = "entryway"
+    out2, ok2 = cmd(w2, "push overgrowth")
+    s.check("push descriptive noun: soft response",
+            "don't see" not in out2.lower() and len(out2) > 0, out2)
+    s.check("push descriptive noun: not consumed", not ok2)
+
+    return s
+
+
+# ============================================================
 # Registry
 # ============================================================
 
@@ -1444,6 +1521,7 @@ SECTIONS: dict[str, tuple[Callable, Set[str]]] = {
     "improvement_b": (test_parser_improvement_b,  {"symbolic"}),
     "map_expansion": (test_map_expansion,          {"symbolic"}),
     "npc_jasper":    (test_npc_jasper,              {"symbolic"}),
+    "desc_fallback": (test_descriptive_noun_fallback, {"symbolic"}),
 }
 
 
