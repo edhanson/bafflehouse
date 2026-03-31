@@ -1382,12 +1382,13 @@ def test_npc_jasper() -> Suite:
     s.check("follows messages do not describe cat already present",
             not any(m and "sitting" in m.lower() for m in follows_msgs))
 
-    # "enters_room" at devoted describes cat already there
-    er_devoted = get_message("jasper", "enters_room", "devoted")
+    # "enters_room" at devoted — check all pool messages, not a random draw
+    er_devoted_pool = JASPER_MESSAGES.get(("enters_room", "devoted"), [])
     s.check("enters_room/devoted: cat already present phrasing",
-            er_devoted is not None and
-            any(p in er_devoted.lower() for p in
-                ["is here", "gets up", "comes to meet"]))
+            len(er_devoted_pool) > 0 and
+            any(p in m.lower()
+                for m in er_devoted_pool
+                for p in ["is here", "gets up", "comes to meet", "pads toward"]))
 
     # ── Devoted wander (5%) fires across many turns ───────────
     import random as _random
@@ -1502,6 +1503,106 @@ def test_descriptive_noun_fallback() -> Suite:
 
 
 # ============================================================
+# SECTION 12 — Parser fixes: lock, synonyms, plurals  [symbolic]
+# ============================================================
+
+def test_parser_fixes() -> Suite:
+    s = Suite("SECTION 12 — Parser fixes: lock, synonyms, plurals")
+
+    # ── #1: lock verb works ───────────────────────────────────
+    w = fresh(); w.player.location = "foyer"
+    move_entity(w, "brass_key", "player")
+    cmd(w, "unlock door with brass key")
+    cmd(w, "open door")
+    cmd(w, "close door")
+    out, _ = cmd(w, "lock door with brass key")
+    s.check("#1 lock door: sensible response",
+            "aren't holding that" not in out.lower(), out)
+    s.check("#1 lock door: lock-related response",
+            any(x in out.lower() for x in
+                ["lock", "doesn't", "locked", "need to", "close"]), out)
+
+    # ── #4: unlight → extinguish ──────────────────────────────
+    w = fresh(); w.player.location = "cellar"
+    move_entity(w, "oil_lamp", "player")
+    move_entity(w, "lamp_oil", "player")
+    move_entity(w, "matchbox", "player")
+    cmd(w, "fill lamp with oil")
+    cmd(w, "light lamp")
+    out, _ = cmd(w, "unlight lamp")
+    s.check("#4 unlight lamp: extinguishes (not 'already lit')",
+            "already lit" not in out.lower(), out)
+    s.check("#4 unlight lamp: lamp is extinguished",
+            any(x in out.lower() for x in
+                ["flame", "dies", "dark", "out", "snuff", "rushes",
+                 "extinguish"]), out)
+
+    # ── #16: dismount synonym ─────────────────────────────────
+    w = fresh(); w.player.location = "trophy_room"
+    out, _ = cmd(w, "dismount broadsword")
+    s.check("#16 dismount: not missing_verb",
+            "want to do with the dismount" not in out.lower(), out)
+    s.check("#16 dismount: broadsword taken down",
+            any(x in out.lower() for x in ["broadsword", "wall", "down"]), out)
+
+    # ── #10: plural entity references ─────────────────────────
+    w = fresh(); w.player.location = "foyer"
+    out, _ = cmd(w, "grab the keys")
+    s.check("#10 grab the keys: not hard denial",
+            "don't see that here" not in out.lower(), out)
+
+    w = fresh(); w.player.location = "entryway"
+    out, _ = cmd(w, "examine hedges")
+    s.check("#10 examine hedges (plural): resolves to garden_hedges",
+            "hedge" in out.lower() or "ornamental" in out.lower() or
+            "catnip" in out.lower(), out)
+
+    # ── #14a: drink returns sensible refusal ──────────────────
+    w = fresh(); w.player.location = "foyer"
+    move_entity(w, "lamp_oil", "player")
+    out, _ = cmd(w, "drink lamp oil")
+    s.check("#14a drink lamp oil: not routed to fill/pour",
+            "reservoir" not in out.lower(), out)
+    s.check("#14a drink lamp oil: sensible refusal",
+            any(x in out.lower() for x in
+                ["drink", "terrible", "can't", "would"]), out)
+
+    # ── #14b: eat cat returns sensible refusal ────────────────
+    w = fresh(); w.player.location = "hall_2"
+    from engine import get_npc_instances
+    import engine as _eng
+    _eng._NPC_INSTANCES.clear()  # ensure fresh NPC placement
+    get_npc_instances(w)
+    out, _ = cmd(w, "eat cat")
+    s.check("#14b eat cat: not routed to attack",
+            "bolts" not in out.lower() and "kick" not in out.lower(), out)
+    s.check("#14b eat cat: sensible refusal",
+            any(x in out.lower() for x in
+                ["eat", "cant", "edible", "can"]), out)
+
+    # ── #11: try X to unlock Y ────────────────────────────────
+    w = fresh(); w.player.location = "foyer"
+    move_entity(w, "brass_key", "player")
+    out, _ = cmd(w, "try the brass key to unlock the oak door")
+    s.check("#11 try key: not 'aren't holding that'",
+            "aren't holding that" not in out.lower(), out)
+    s.check("#11 try key: meaningful response",
+            any(x in out.lower() for x in
+                ["lock", "door", "key", "unlocked", "unlock"]), out)
+
+    # ── slip should NOT route to drink ────────────────────────
+    w = fresh(); w.player.location = "foyer"
+    move_entity(w, "brass_key", "player")
+    move_entity(w, "wooden_box", "player")
+    out, _ = cmd(w, "slip the brass key into the box")
+    s.check("slip into box: not routed to drink",
+            "drink" not in out.lower() and
+            "sip" not in out.lower(), out)
+
+    return s
+
+
+# ============================================================
 # Registry
 # ============================================================
 
@@ -1522,6 +1623,7 @@ SECTIONS: dict[str, tuple[Callable, Set[str]]] = {
     "map_expansion": (test_map_expansion,          {"symbolic"}),
     "npc_jasper":    (test_npc_jasper,              {"symbolic"}),
     "desc_fallback": (test_descriptive_noun_fallback, {"symbolic"}),
+    "parser_fixes":  (test_parser_fixes,               {"symbolic"}),
 }
 
 

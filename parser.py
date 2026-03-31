@@ -142,6 +142,18 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         shape="verb_obj_prep_iobj",
         preferred_preps=["in", "into", "inside", "on", "onto"],
     ),
+    "lock": VerbDefinition(
+        verb_id="lock",
+        literal_forms=["lock", "bolt", "secure", "latch", "bar"],
+        semantic_examples=[
+            "lock a door with a key",
+            "lock something",
+            "secure the door",
+        ],
+        shape="verb_obj_prep_iobj",
+        preferred_preps=["with", "using"],
+    ),
+
     "unlock": VerbDefinition(
         verb_id="unlock",
         literal_forms=["unlock"],
@@ -187,7 +199,8 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
     # EXTINGUISH — sets "lit": False on a lit entity.
     "extinguish": VerbDefinition(
         verb_id="extinguish",
-        literal_forms=["extinguish", "douse", "snuff", "blow out", "put out", "turn off"],
+        literal_forms=["extinguish", "douse", "snuff", "blow out", "put out", "turn off",
+                       "unlight"],
         semantic_examples=[
             "extinguish a flame",
             "put out a candle",
@@ -331,6 +344,30 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         shape="verb_obj_prep_iobj",
         preferred_preps=["to", "toward"],
     ),
+    # CONSUME verbs — drink and eat are handled by the engine which
+    # checks whether the target is actually drinkable/edible.
+    "drink": VerbDefinition(
+        verb_id="drink",
+        literal_forms=["drink", "swallow", "quaff", "imbibe"],
+        semantic_examples=[
+            "drink something",
+            "sip from a container",
+            "swallow a liquid",
+        ],
+        shape="verb_obj",
+    ),
+    "eat": VerbDefinition(
+        verb_id="eat",
+        literal_forms=["eat", "consume", "taste", "bite", "chew", "munch",
+                       "devour", "nibble"],
+        semantic_examples=[
+            "eat something",
+            "consume food",
+            "taste an item",
+        ],
+        shape="verb_obj",
+    ),
+
     "call": VerbDefinition(
         verb_id="call",
         literal_forms=["call", "call to", "call out", "speak to",
@@ -601,6 +638,11 @@ def rewrite_interaction_idioms(text: str) -> str:
         (r"^light\s+a?\s*match(?:es)?$",           r"light matchbox"),
         (r"^ignite\s+a?\s*match(?:es)?$",          r"light matchbox"),
         (r"^strike\s+a?\s*match(?:es)?\s+(.+)$",  r"light matchbox"),
+
+        # "try X to/on Y" → "unlock Y with X"
+        # handles "try the brass key to unlock the door"
+        (r"^try\s+(.+?)\s+(?:to\s+(?:un)?lock|on)\s+(.+)$", r"unlock \2 with \1"),
+        (r"^try\s+(.+?)\s+(?:to\s+open)\s+(.+)$",           r"open \2 with \1"),
 
         # NPC interaction idioms
         (r"^give\s+(.+)\s+to\s+(.+)$",            r"feed \1 to \2"),
@@ -999,6 +1041,8 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "employ":      "use",
     "utilise":     "use",
     "utilize":     "use",
+    # extinguish-family
+    "unlight":     "extinguish",
     # pet-family
     "caress":      "pet",
     "rub":         "pet",
@@ -1006,6 +1050,7 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "hiss at":     "call",
     "greet":       "call",
     # unmount-family
+    "dismount":    "unmount",
     "unstrap":     "unmount",
     "unbuckle":    "unmount",
     "pry off":     "unmount",
@@ -1475,6 +1520,48 @@ def resolve_phrase_to_entities(
     tokens = [t for t in phrase.split() if t not in FILLER]
     if not tokens:
         return []
+
+    # ── Plural normalisation ──────────────────────────────────────────────
+    # Try candidate singular forms for the last token.  For each candidate,
+    # check whether any visible entity alias *exactly* contains that token.
+    # If so, replace the phrase/tokens so downstream matching works.
+    #
+    # Candidates (tried in order, first match wins):
+    #   "ies" -> "y"   (e.g. "keys" skipped — not ies; "libraries"->"library")
+    #   strip "s"      (e.g. "keys"->"key", "portraits"->"portrait")
+    #   strip "es"     (e.g. "hedges"->"hedge", "boxes"->"box")
+    # We do NOT try these blindly — we only apply a strip if the resulting
+    # token appears in at least one visible entity alias token set.
+    _last = tokens[-1]
+    def _try_singular(candidate: str) -> bool:
+        """Return True if candidate is an alias token for any visible entity."""
+        return any(
+            candidate in set(normalize(alias).split())
+            for eid in visible
+            for alias in world.entity(eid).aliases
+        )
+
+    _singular = _last
+    if _last.endswith("ies") and len(_last) > 4:
+        _cand = _last[:-3] + "y"
+        if _try_singular(_cand):
+            _singular = _cand
+    if _singular == _last and _last.endswith("s") and len(_last) > 2:
+        _cand = _last[:-1]   # strip "s": "keys"->"key", "portraits"->"portrait"
+        if _try_singular(_cand):
+            _singular = _cand
+    if _singular == _last and _last.endswith("es") and len(_last) > 3:
+        _cand = _last[:-2]   # strip "es": "hedges"->"hedg" skipped above,
+        # actually for -ges/-tes/-ves we want to strip only "s"
+        # already handled above; this catches "boxes"->"box"
+        if _try_singular(_cand):
+            _singular = _cand
+
+    if _singular != _last:
+        _singular_tokens = tokens[:-1] + [_singular]
+        phrase  = " ".join(_singular_tokens)
+        tokens  = _singular_tokens
+
 
     one_word = len(tokens) == 1
     scored: Dict[str, float] = {}

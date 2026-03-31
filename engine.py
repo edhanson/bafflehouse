@@ -796,6 +796,129 @@ def handle_unlock(world: World, ir: dict) -> Tuple[str, bool]:
 # Action handlers — new verbs
 # ============================================================
 
+def handle_lock(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Lock a lockable entity with a key from inventory.
+    Mirrors handle_unlock — the door must already be closed.
+    """
+    obj  = ir.get("obj")
+    iobj = ir.get("iobj")
+
+    if not obj:
+        return "Lock what?", False
+    if obj not in world.entities:
+        if phrase_in_room_text(world, str(obj)):
+            return "That doesn't have a lock.", False
+        return "You don't see that here.", False
+
+    err = require_visible(world, obj)
+    if err:
+        return err, False
+
+    if not iobj:
+        return "Lock it with what?", False
+    if iobj not in world.entities:
+        return f"You aren't holding any {iobj}.", False
+    if iobj not in world.player.inventory:
+        return "You aren't holding that.", False
+
+    thing = world.entity(obj)
+    key   = world.entity(iobj)
+
+    if "lockable" not in thing.tags:
+        return "That doesn't have a lock.", False
+    if thing.props.get("locked", False):
+        return "It's already locked.", False
+    if thing.props.get("open", False):
+        return "You'll need to close it first.", False
+
+    needed = thing.props.get("key_id")
+    if needed is not None and key.props.get("key_id") != needed:
+        return "That key doesn't seem to fit.", False
+
+    thing.props["locked"] = True
+    world.note_ref([obj, iobj])
+    return narrate(["Locked.", "The lock clicks shut."]), True
+
+
+def handle_drink(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Attempt to drink something.
+
+    Currently no drinkable items exist in the world, so this handler
+    exists to give sensible responses rather than routing to fill/pour
+    or producing nonsense.  Checks for the "drinkable" tag for future
+    content; everything else gets a contextual refusal.
+    """
+    obj = ir.get("obj")
+
+    if not obj:
+        return "Drink what?", False
+    if obj not in world.entities:
+        if phrase_in_room_text(world, str(obj)):
+            return "You can't drink that.", False
+        return "You don't see that here.", False
+
+    err = require_visible(world, obj)
+    if err:
+        return err, False
+
+    ent = world.entity(obj)
+
+    if "drinkable" in ent.tags:
+        # Future: consume the item and apply its effect.
+        return f"You drink {ent.name}.", True
+
+    if "liquid" in ent.tags or ent.props.get("liquid"):
+        return f"Drinking {ent.name} would be a terrible idea.", False
+
+    if "living" in ent.tags or "npc" in ent.tags:
+        return "That's not something you can drink.", False
+
+    if "portable" not in ent.tags and "container" not in ent.tags:
+        return "You can't drink that.", False
+
+    return "That's not something you can drink.", False
+
+
+def handle_eat(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Attempt to eat something.
+
+    Checks for the "food" tag for items that can actually be consumed.
+    NPCs, scenery, and non-food items get contextual refusals.
+    """
+    obj = ir.get("obj")
+
+    if not obj:
+        return "Eat what?", False
+    if obj not in world.entities:
+        if phrase_in_room_text(world, str(obj)):
+            return "You can't eat that.", False
+        return "You don't see that here.", False
+
+    err = require_visible(world, obj)
+    if err:
+        return err, False
+
+    ent = world.entity(obj)
+
+    if "living" in ent.tags or "npc" in ent.tags:
+        return f"You can't eat {ent.name}.", False
+
+    if "food" in ent.tags:
+        # Future: consume and apply effect.  For now, decline gracefully.
+        return (
+            f"You consider eating {ent.name}. "
+            "Better to save it for a more pressing need."
+        ), False
+
+    if "scenery" in ent.tags:
+        return "You can't eat that.", False
+
+    return "That doesn't look edible.", False
+
+
 def handle_read(world: World, ir: dict) -> Tuple[str, bool]:
     """
     Read a 'readable'-tagged entity.
@@ -1667,6 +1790,9 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "unmount":    handle_unmount,
     "wield":      handle_wield,
     "attack":     handle_attack,
+    "lock":       handle_lock,
+    "drink":      handle_drink,
+    "eat":        handle_eat,
     "pet":        handle_pet,
     "feed":       handle_feed,
     "offer":      handle_offer,
