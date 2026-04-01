@@ -276,6 +276,8 @@ class NPC:
     last_room:      str       = ""
     revealed_name:  bool      = False
     session_moves:  int       = 0
+    just_fled:      bool      = False  # set True when forcibly moved away;
+                                       # prevents tick from wandering back
 
     @property
     def npc_id(self) -> str:
@@ -379,9 +381,11 @@ def npc_tick(
 
     if disposition == "devoted" and npc.defn.follows_when_devoted:
         # Occasional independent wander even when devoted
+        npc.just_fled = False  # clear flag at start of each tick
         if random.random() < WANDER_CHANCE_DEVOTED:
             # Pick any adjacent room — no home_rooms restriction when devoted
             current_room = world.rooms.get(npc.location)
+            was_with_player = (npc.location == player_room)
             if current_room:
                 candidates = list(current_room.exits.values())
                 if candidates:
@@ -389,6 +393,11 @@ def npc_tick(
                     _move_npc(npc, dest, world)
                     npc_room  = dest
                     same_room = (dest == player_room)
+                    # If cat just left the player's room, say so
+                    if was_with_player and not same_room:
+                        messages.append(
+                            "The cat slips away into the next room."
+                        )
         elif not same_room:
             # Follow the player
             _move_npc(npc, player_room, world)
@@ -435,8 +444,31 @@ def npc_tick(
                     messages.append(msg)
             return messages
 
-        # Not cautious — stay and produce ambient message (low probability
-        # so it doesn't fire every single turn)
+        # Not cautious — occasional wander even when with the player.
+        # Disposition controls how likely the cat is to drift away:
+        # wary cats are still uncomfortable and move on more often;
+        # friendly cats are content to stay.  Devoted cats never
+        # reach this branch — they are handled above.
+        WANDER_CHANCE_IN_ROOM = {
+            "wary":    0.20,
+            "neutral": 0.12,
+            "friendly":0.06,
+        }
+        wander_roll = WANDER_CHANCE_IN_ROOM.get(disposition, 0.0)
+        if wander_roll > 0.0 and random.random() < wander_roll:
+            dest = _choose_wander_destination(npc, world, away_from=None)
+            if dest:
+                _move_npc(npc, dest, world)
+                # Produce a departure message so the player sees it leave
+                wander_msgs = {
+                    "wary":    "The cat moves away and slips into the next room.",
+                    "neutral": "The cat gets up and wanders off.",
+                    "friendly":"The cat trots off to investigate something.",
+                }
+                messages.append(wander_msgs.get(disposition, "The cat moves away."))
+            return messages
+
+        # Produce an enters_room or ambient message if the cat stayed
         if player_moved:
             # Player just arrived — enters_room message
             msg = get_message(npc.npc_id, "enters_room", disposition)
@@ -452,10 +484,28 @@ def npc_tick(
         return messages
 
     # ── NPC is in a different room — random wander ────────────────────────
+    # Skip if the NPC was forcibly moved this turn (e.g. kicked) to
+    # prevent the tick from immediately wandering it back.
+    if npc.just_fled:
+        npc.just_fled = False
+        return messages
+
     if random.random() < npc.defn.wander_chance:
         dest = _choose_wander_destination(npc, world)
         if dest:
+            was_with_player = (npc.location == player_room)
             _move_npc(npc, dest, world)
+            # If cat just left the player's room, produce a departure message
+            if was_with_player:
+                disp = memory.disposition(npc.npc_id)
+                wander_msgs = {
+                    "wary":    "The cat moves away and slips into the next room.",
+                    "neutral": "The cat gets up and wanders off.",
+                    "friendly":"The cat trots off to investigate something.",
+                    "devoted": "The cat slips away into the next room.",
+                }
+                msg = wander_msgs.get(disp, "The cat moves away.")
+                messages.append(msg)
 
     return messages
 
@@ -503,8 +553,18 @@ def handle_feed_npc(
     food_ent = world.entities[food_eid]
     disposition = memory.disposition(npc.npc_id)
 
+    # Only food-tagged or catnip-tagged items are accepted.
+    # Anything else is refused without consuming the item.
+    is_catnip = "catnip" in food_ent.tags
+    is_food   = "food"   in food_ent.tags
+    if not is_catnip and not is_food:
+        return (
+            f"{npc.display_name.capitalize()} sniffs {food_ent.name} "
+            "and turns away. It isn't interested in that."
+        ), False
+
     # Determine event type from food tags
-    if "catnip" in food_ent.tags:
+    if is_catnip:
         event = "player_gave_catnip"
         situation = "catnip"
     else:

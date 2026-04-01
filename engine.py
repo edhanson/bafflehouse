@@ -1762,6 +1762,7 @@ def handle_attack(world: World, ir: dict) -> Tuple[str, bool]:
             )
             if dest:
                 _move_npc(npc, dest, world)
+                npc.just_fled = True  # prevent tick from wandering back same turn
         responses = [
             f"You kick {ent.name}. It bolts from the room instantly.",
             f"You strike {ent.name}. It is gone in an instant.",

@@ -1419,6 +1419,51 @@ def test_npc_jasper() -> Suite:
             jasper.location in home_rooms,
             f"ended in {jasper.location}")
 
+    # ── Bug: non-food items rejected ──────────────────────────
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    set_trust(neutral=True)
+    move_entity(w, "matchbox", "player")
+    out, _ = cmd(w, "feed cat with matches")
+    s.check("non-food item refused",
+            "isn't interested" in out.lower() or
+            "not interested" in out.lower(), out)
+    s.check("non-food item not consumed",
+            w.entities["matchbox"].location != "consumed")
+
+    # Cat food still accepted
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    set_trust(neutral=True)
+    move_entity(w, "cat_food", "player")
+    out, _ = cmd(w, "feed cat food to cat")
+    s.check("cat food accepted",
+            w.entities["cat_food"].location == "consumed", out)
+
+    # ── Bug: devoted wander produces departure message ─────────
+    import random as _random
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    NPC_MEMORY.reputation("jasper").confirmations    = 35.0
+    NPC_MEMORY.reputation("jasper").disconfirmations = 4.0
+    wander_msg_found = False
+    for _seed in range(200):
+        _random.seed(_seed)
+        place_jasper(w, "hall_2")
+        out, _ = cmd(w, "pet cat")
+        if jasper.location != "hall_2" and "slips away" in out.lower():
+            wander_msg_found = True
+            break
+    s.check("devoted wander produces departure message", wander_msg_found)
+
+    # ── Bug: kick does not return cat to same room same turn ───
+    w = npc_fresh(); w.player.location = "hall_2"
+    jasper = place_jasper(w, "hall_2")
+    _random.seed(0)
+    out, _ = cmd(w, "kick cat")
+    s.check("cat leaves room after kick",
+            jasper.location != "hall_2", jasper.location)
+
     # ── Cleanup ───────────────────────────────────────────────
     _npc_cleanup()
 
