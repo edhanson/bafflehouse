@@ -73,8 +73,7 @@ def build_demo_world() -> World:
             desc=(
                 "A long hall runs northward into shadow. Stone walls are hung with faded "
                 "hunting portraits. The oak door to the south leads back toward the foyer. "
-                "A dusty side table near the door holds what appears to be a journal. "
-                "The hall continues north."
+                "A narrow side table stands near the door. The hall continues north."
             ),
             exits={"east": "library", "north": "hall_2"}
             # NOTE: "south" added dynamically when oak door is opened.
@@ -281,6 +280,7 @@ def build_demo_world() -> World:
             tags={"openable", "container"},
             props={
                 "desc": "A small wooden box with a hinged lid. Something rattles faintly inside.",
+                "desc_empty": "A small wooden box with a hinged lid, now empty.",
                 "open": False
             },
             location="foyer"
@@ -341,7 +341,7 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "A narrow side table pushed against the wall near the south door. "
-                    "Its surface is thick with dust. The journal rests on top of it."
+                    "Its surface is thick with dust."
                 ),
             },
             location="hall_1"
@@ -582,9 +582,12 @@ def build_demo_world() -> World:
             tags={"container", "openable", "lockable", "scenery"},
             props={
                 "desc": (
-                    "A glass-fronted display case, locked with a small brass clasp. "
-                    "Inside you can make out a gleaming ring and what looks like "
-                    "a folded piece of paper."
+                    "A glass-fronted display case with a small brass clasp. "
+                    "The glass is dusty but intact."
+                ),
+                "desc_empty": (
+                    "A glass-fronted display case with a small brass clasp. "
+                    "The glass is dusty but intact."
                 ),
                 "open": False,
                 "locked": True,
@@ -602,7 +605,7 @@ def build_demo_world() -> World:
             aliases=["journal", "old journal", "book", "leather journal", "diary"],
             tags={"portable", "readable"},
             props={
-                "desc": "A leather-bound journal, left on a dusty side table.",
+                "desc": "A leather-bound journal with a worn cover. The entries inside are cramped and hurried.",
                 "readable_text": (
                     "The handwriting is cramped and hurried. Most entries are mundane "
                     "household accounts, but near the back you find an entry that reads:\n\n"
@@ -864,6 +867,7 @@ def build_demo_world() -> World:
             tags={"portable", "liquid_source"},
             props={
                 "desc": "A small glass flask, half-full of clear lamp oil.",
+                "desc_empty": "A small glass flask, now empty.",
                 "liquid": "oil",
                 "empty": False,
             },

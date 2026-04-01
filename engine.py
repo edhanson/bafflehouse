@@ -502,10 +502,22 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
             if room and "catnip" not in room.entities:
                 room.entities.append("catnip")
 
-    # For liquid-bearing containers, swap to the empty description once drained.
-    # For scenery with a state-dependent description (e.g. bricked_wall after
-    # the lever is pulled), check for desc_open when the relevant passage exists.
-    if ent.props.get("empty", False) and "desc_empty" in ent.props:
+    # Select the appropriate description based on entity state.
+    #
+    # Priority order:
+    #   1. Liquid container that has been emptied (empty=True)
+    #   2. Solid container that is open and has no contents
+    #   3. Scenery with a state-dependent desc_open (e.g. bricked_wall)
+    #   4. Default desc
+    _is_empty_liquid = ent.props.get("empty", False) and "desc_empty" in ent.props
+    _is_empty_solid  = (
+        "container" in ent.tags
+        and ent.props.get("open", False)
+        and not ent.contains
+        and not (ent.props.get("liquid") and not ent.props.get("empty", False))
+        and "desc_empty" in ent.props
+    )
+    if _is_empty_liquid or _is_empty_solid:
         desc = ent.props["desc_empty"]
     elif ("desc_open" in ent.props
           and world.rooms.get(world.player.location, None) is not None
@@ -657,14 +669,20 @@ def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
     if obj == "oak_door":
         world.rooms["foyer"].exits["north"] = "hall_1"
         world.rooms["hall_1"].exits["south"] = "foyer"
-        return "The oak door swings open, revealing the hall beyond.", True
+        return narrate([
+            "The oak door swings open.",
+            "The oak door opens with a low groan.",
+            "The oak door swings back on its hinges.",
+        ]), True
 
     if obj == "study_door":
         world.rooms["trophy_room"].exits["south"] = "secret_study"
         world.rooms["secret_study"].exits["north"] = "trophy_room"
-        return (
-            "The heavy door swings inward, revealing a passage to the south."
-        ), True
+        return narrate([
+            "The heavy door swings inward.",
+            "The door opens with a reluctant creak.",
+            "The door gives way, swinging open.",
+        ]), True
 
     return narrate(["Opened.", "The thing opens.", "With a modest show of cooperation, it opens."]), True
 
