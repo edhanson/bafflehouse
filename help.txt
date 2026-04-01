@@ -1,0 +1,59 @@
+BAFFLEHOUSE — HOW TO PLAY
+─────────────────────────────────────────────────────────────────────────────
+
+MOVEMENT
+  Go north / south / east / west       Move between rooms.
+  Enter the door                        Pass through a named door or passage.
+  n / s / e / w                         Shorthand compass directions.
+
+LOOKING AROUND
+  Look                                  Describe the current room.
+  Examine <thing>                       Inspect something closely.
+  Inventory                             List what you are carrying.
+
+TAKING AND DROPPING
+  Take <thing>                          Pick something up.
+  Drop <thing>                          Put something down.
+  Put <thing> in <container>            Place an item inside something.
+
+DOORS AND LOCKS
+  Open <door>                           Open a door or container.
+  Close <door>                          Close it.
+  Unlock <door> with <key>              Unlock a locked door or container.
+  Lock <door> with <key>                Lock it again.
+
+OBJECTS AND PUZZLES
+  Read <thing>                          Read a readable item.
+  Pull <thing>                          Pull something (levers, handles).
+  Push <thing>                          Push something.
+  Light <thing>                         Light a lamp or candle.
+  Extinguish <thing>                    Put out a flame.
+  Fill <container> with <liquid>        Pour liquid into a container.
+  Pour <liquid> into <container>        The same, phrased differently.
+  Wear <item>                           Put on clothing or armour.
+  Remove <item>                         Take it off.
+  Unmount <item>                        Take a mounted item off a wall.
+  Wield <weapon>                        Ready a weapon.
+
+NATURAL LANGUAGE
+  The parser understands many phrasings beyond the examples above.
+  "I want to take the key", "pick it up", "look at the portraits",
+  "try the brass key on the lock", "give the cat some food" — all work.
+  When a command is ambiguous, the game will ask you to clarify.
+
+THE CAT
+  A grey cat lives in the manor. It is cautious at first.
+  Spend time near it, offer it food, and be patient.
+
+TIPS
+  — Read things you find. Notes and journals contain clues.
+  — Examine everything, including scenery mentioned in descriptions.
+  — If something seems interactive, try pulling or pushing it.
+  — "You notice nothing special about it" means it is decorative.
+  — "You don't see that here" means it is not in this room.
+
+OTHER COMMANDS
+  Quit / exit                           End the session.
+  Help                                  Show this message.
+
+─────────────────────────────────────────────────────────────────────────────

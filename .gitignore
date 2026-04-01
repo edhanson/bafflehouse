@@ -6,6 +6,7 @@ venv/
 # ── Project-specific ignored directories ─────────────────────
 deprecated_files/
 OLD/
+logs/
 
 # ── Embedding model (large, downloaded on demand) ────────────
 models/

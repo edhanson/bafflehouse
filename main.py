@@ -1,17 +1,17 @@
 """
 main.py
 
-Entry point for the interactive fiction engine.
+Entry point for the Bafflehouse interactive fiction engine.
 
-This script wires together:
-- the demo world from content.py
-- the parser system from parser.py
-- the game loop and command processing from engine.py
-
-Output text is word-wrapped to fit the current terminal width, measured
-each time a response is printed so it adapts if the window is resized.
-A fallback width of 80 columns is used if the terminal size cannot be
-determined (e.g. when output is piped).
+Features
+────────
+- Splash screen: ASCII art title displayed at startup.
+- Session seed: a random seed is generated from the current datetime and
+  printed at startup.  The player can supply a specific seed at the prompt
+  to reproduce a previous session's random behaviour.
+- Session log: every line of output (and every command) is written to a
+  timestamped log file in the logs/ directory alongside the game files.
+- In-game help: typing "help" prints the contents of help.txt.
 
 Run:
     python main.py
@@ -20,15 +20,17 @@ Run:
 from __future__ import annotations
 
 import os
+import random
 import shutil
 import textwrap
-from typing import Optional
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, TextIO
 
-
-# ------------------------------------------------------------
-# Force local/offline Hugging Face behavior BEFORE imports.
-# ------------------------------------------------------------
-os.environ["HF_HUB_OFFLINE"] = "1"
+# ────────────────────────────────────────────────────────────────────────────
+# Force local / offline Hugging Face behaviour BEFORE any HF imports.
+# ────────────────────────────────────────────────────────────────────────────
+os.environ["HF_HUB_OFFLINE"]           = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 
 from content import build_demo_world
@@ -40,48 +42,24 @@ from parser import ParserSystem, normalize
 # Text formatting
 # ============================================================
 
-# Leave a small margin so text does not run hard against the terminal edge.
-_MARGIN = 2
+_MARGIN        = 2
 _FALLBACK_WIDTH = 80
 
 
 def terminal_width() -> int:
-    """
-    Return the current terminal width in columns minus a small margin.
-
-    shutil.get_terminal_size() queries the OS at call time, so this
-    reflects the current window size rather than the size at startup.
-    The fallback value is used when stdout is not a TTY (e.g. piped).
-    """
     cols = shutil.get_terminal_size(fallback=(_FALLBACK_WIDTH, 24)).columns
     return max(40, cols - _MARGIN)
 
 
 def wrap(text: str) -> str:
-    """
-    Word-wrap text to fit the current terminal width.
-
-    Each paragraph (separated by a blank line or a single \\n) is wrapped
-    independently so that short lines — room titles, single-line responses
-    like "Taken." — are never merged with the paragraph that follows them.
-
-    A paragraph that is already shorter than the terminal width is returned
-    unchanged.  Leading whitespace within a paragraph is preserved so that
-    any intentional indentation (e.g. numbered clarification lists) is kept.
-    """
     width = terminal_width()
-    paragraphs = text.split("\n")
     wrapped = []
-    for para in paragraphs:
+    for para in text.split("\n"):
         if not para.strip():
-            # Preserve blank lines between paragraphs.
             wrapped.append("")
         elif len(para) <= width:
-            # Short line — no wrapping needed.
             wrapped.append(para)
         else:
-            # Determine indentation of this paragraph so wrapped continuation
-            # lines are indented to the same level.
             indent = len(para) - len(para.lstrip())
             wrapped.append(
                 textwrap.fill(
@@ -94,9 +72,143 @@ def wrap(text: str) -> str:
     return "\n".join(wrapped)
 
 
-def print_output(text: str) -> None:
-    """Wrap and print a block of engine output."""
-    print(wrap(text))
+# ============================================================
+# Session log
+# ============================================================
+
+class SessionLog:
+    """
+    Writes all output and player commands to a timestamped file in logs/.
+    """
+
+    def __init__(self, seed: int) -> None:
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+
+        timestamp  = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.path  = log_dir / f"bafflehouse_{timestamp}.log"
+        self._file: TextIO = self.path.open("w", encoding="utf-8")
+
+        self._file.write("BAFFLEHOUSE session log\n")
+        self._file.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        self._file.write(f"Seed:    {seed}\n")
+        self._file.write("\u2500" * 72 + "\n\n")
+        self._file.flush()
+
+    def log_output(self, text: str) -> None:
+        self._file.write(text + "\n")
+        self._file.flush()
+
+    def log_command(self, clock: int, text: str) -> None:
+        self._file.write(f"\n[{clock}] > {text}\n")
+        self._file.flush()
+
+    def close(self) -> None:
+        self._file.write("\n" + "\u2500" * 72 + "\n")
+        self._file.write(
+            f"Session ended: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
+        self._file.close()
+
+
+# ============================================================
+# Splash screen
+# ============================================================
+
+_SPLASH = r"""
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║    ██████╗  █████╗ ███████╗███████╗██╗     ███████╗    ║
+║    ██╔══██╗██╔══██╗██╔════╝██╔════╝██║     ██╔════╝    ║
+║    ██████╔╝███████║█████╗  █████╗  ██║     █████╗      ║
+║    ██╔══██╗██╔══██║██╔══╝  ██╔══╝  ██║     ██╔══╝      ║
+║    ██████╔╝██║  ██║██║     ██║     ███████╗███████╗    ║
+║    ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝     ╚══════╝╚══════╝    ║
+║                                                        ║
+║    ██╗  ██╗ ██████╗ ██╗   ██╗███████╗███████╗          ║
+║    ██║  ██║██╔═══██╗██║   ██║██╔════╝██╔════╝          ║
+║    ███████║██║   ██║██║   ██║███████╗█████╗            ║
+║    ██╔══██║██║   ██║██║   ██║╚════██║██╔══╝            ║
+║    ██║  ██║╚██████╔╝╚██████╔╝███████║███████╗          ║
+║    ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝          ║
+║                                                        ║
+║                 An Interactive Fiction                 ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+"""
+
+
+def print_splash() -> None:
+    width = terminal_width()
+    for line in _SPLASH.split("\n"):
+        if len(line) <= width:
+            print(line.center(width) if line.strip() else line)
+        else:
+            print(line)
+
+
+# ============================================================
+# Seed management
+# ============================================================
+
+def generate_default_seed() -> int:
+    """Generate a seed from the current datetime (YYYYMMDDHHMMSS)."""
+    return int(datetime.now().strftime("%Y%m%d%H%M%S"))
+
+
+def prompt_for_seed() -> int:
+    """
+    Show the default seed and allow the player to override it.
+    Pressing Enter accepts the default.
+    """
+    default = generate_default_seed()
+    print(f"  Session seed: {default}")
+    print(f"  Press Enter to use this seed, or type a different number")
+    print(f"  to reproduce a specific previous session.")
+    print()
+
+    while True:
+        try:
+            raw = input("  Seed > ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+        if not raw:
+            return default
+
+        try:
+            return int(raw)
+        except ValueError:
+            print("  Please enter a whole number, or press Enter for the default.")
+
+
+# ============================================================
+# Help command
+# ============================================================
+
+_HELP_FILE = Path(__file__).parent / "help.txt"
+
+
+def load_help() -> str:
+    """Return the contents of help.txt, or a brief fallback."""
+    if _HELP_FILE.exists():
+        return _HELP_FILE.read_text(encoding="utf-8").rstrip()
+    return (
+        "Help file not found.\n"
+        "Basic commands: look, examine <thing>, take <thing>,\n"
+        "go <direction>, open <thing>, read <thing>, inventory, quit."
+    )
+
+
+# ============================================================
+# Output helpers
+# ============================================================
+
+def print_and_log(text: str, log: SessionLog) -> None:
+    """Wrap, print, and log a block of text."""
+    wrapped = wrap(text)
+    print(wrapped)
+    log.log_output(wrapped)
 
 
 # ============================================================
@@ -104,43 +216,78 @@ def print_output(text: str) -> None:
 # ============================================================
 
 def main() -> None:
-    world = build_demo_world()
+    # ── Splash ───────────────────────────────────────────────────────────
+    print_splash()
+    print()
+
+    # ── Seed ─────────────────────────────────────────────────────────────
+    seed = prompt_for_seed()
+    random.seed(seed)
+    print(f"  Starting session with seed {seed}.")
+    print()
+
+    # ── Session log ───────────────────────────────────────────────────────
+    log = SessionLog(seed)
+
+    # ── World and parser ──────────────────────────────────────────────────
+    world         = build_demo_world()
     parser_system = ParserSystem.build_default(
         local_model_dir="./models/all-MiniLM-L6-v2"
     )
     pending_clarify: Optional[dict] = None
 
     if parser_system.embedder.enabled():
-        print_output("Semantic parser enabled (local model only).")
+        msg = "Semantic parser enabled (local model only)."
     else:
-        print_output("Semantic parser unavailable; using symbolic parser only.")
+        msg = "Semantic parser unavailable; using symbolic parser only."
         if parser_system.embedder.load_error:
-            print_output(f"Reason: {parser_system.embedder.load_error}")
+            msg += f"\nReason: {parser_system.embedder.load_error}"
 
+    print_and_log(msg, log)
     print()
-    print_output(do_look(world))
 
+    initial_look = do_look(world)
+    print_and_log(initial_look, log)
+
+    # ── Game loop ─────────────────────────────────────────────────────────
     while True:
+        prompt = f"\n[{world.clock.now}] > "
+
         try:
-            line = input(f"\n[{world.clock.now}] > ")
+            line = input(prompt)
         except (EOFError, KeyboardInterrupt):
-            print("\nFarewell.")
+            farewell = "Farewell."
+            print(f"\n{farewell}")
+            log.log_output(f"\n{farewell}")
             break
 
         if not line.strip():
             continue
 
-        if normalize(line) in {"quit", "exit"}:
-            print("Farewell.")
+        log.log_command(world.clock.now, line)
+        normalised = normalize(line)
+
+        # ── Meta commands ─────────────────────────────────────────────────
+        if normalised in {"quit", "exit"}:
+            farewell = "Farewell."
+            print(farewell)
+            log.log_output(farewell)
             break
 
+        if normalised in {"help", "h", "?"}:
+            print_and_log(load_help(), log)
+            continue
+
+        # ── Engine ────────────────────────────────────────────────────────
         output, pending_clarify = process_input(
-            world=world,
-            parser_system=parser_system,
-            text=line,
-            pending_clarify=pending_clarify,
+            world           = world,
+            parser_system   = parser_system,
+            text            = line,
+            pending_clarify = pending_clarify,
         )
-        print_output(output)
+        print_and_log(output, log)
+
+    log.close()
 
 
 if __name__ == "__main__":
