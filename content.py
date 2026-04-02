@@ -323,10 +323,11 @@ def build_demo_world() -> World:
             desc=(
                 "You are lost in the forest. Your sense of direction has become "
                 "scrambled. A pale fungus grows on the bark of a nearby tree. "
-                "The silence here is deeper than it should be."
+                "The silence here is deeper than it should be. To the west, "
+                "the trees may be thinning slightly — or it may be wishful thinking."
             ),
             exits={"north": "forest_c", "south": "forest_b",
-                   "east": "forest_a", "west": "forest_c"}
+                   "east": "forest_a", "west": "forest_edge"}
         ),
 
         # Kitchen — west of the cellar passage; accessible only after

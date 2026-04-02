@@ -1745,6 +1745,18 @@ def test_world_expansion() -> Suite:
     s.check("three directions from edge reach three maze rooms",
             len(reachable) == 3 and all(r.startswith("forest_") for r in reachable))
 
+    # Maze has an exit: forest_d west leads back to forest_edge
+    s.check("forest_d west -> forest_edge (escape route)",
+            w.rooms["forest_d"].exits.get("west") == "forest_edge")
+    # Player can navigate from edge into maze and back out
+    w2 = fresh(); w2.player.location = "forest_edge"
+    cmd(w2, "go north")  # -> forest_a
+    cmd(w2, "go west")   # -> forest_d  (forest_a west = forest_d)
+    cmd(w2, "go west")   # -> forest_edge (forest_d west = forest_edge)
+    s.check("player can escape maze via forest_d west",
+            w2.player.location == "forest_edge",
+            w2.player.location)
+
     # ── Servants staircase ───────────────────────────────────
     w = fresh()
     s.check("hall_2 up -> upstairs_landing",
