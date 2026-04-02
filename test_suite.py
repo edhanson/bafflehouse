@@ -316,8 +316,15 @@ def test_dark_cellar() -> Suite:
     vis = visible_entities_for_room(w)
     s.check("cellar_lever invisible without lamp", "cellar_lever" not in vis)
     s.check("water_ewer invisible without lamp",   "water_ewer"   not in vis)
-    s.check("oil_lamp always visible",             "oil_lamp"     in  vis)
-    s.check("lamp_oil always visible",             "lamp_oil"     in  vis)
+    # oil_lamp and lamp_oil have moved to bedroom_east and gatehouse_interior
+    # respectively — no longer in cellar, so dark-cellar visibility tests
+    # for those items are no longer applicable.
+    w_bed = fresh(); w_bed.player.location = "bedroom_east"
+    vis_bed = visible_entities_for_room(w_bed)
+    s.check("oil_lamp visible in bedroom_east",   "oil_lamp"  in vis_bed)
+    w_gate = fresh(); w_gate.player.location = "gatehouse_interior"
+    vis_gate = visible_entities_for_room(w_gate)
+    s.check("lamp_oil visible in gatehouse_interior", "lamp_oil" in vis_gate)
 
     w2 = lit()
     vis2 = visible_entities_for_room(w2)
@@ -566,7 +573,7 @@ def test_verb_handlers() -> Suite:
 
     # Take response names the item
     w = fresh()
-    w.player.location = "cellar"
+    w.player.location = "bedroom_east"
     out, _ = cmd(w, "get lamp")
     s.check("take names item (not bare 'it')",
             "take it" not in out.lower() and "lamp" in out.lower(), out)
@@ -835,9 +842,9 @@ def test_parser_improvement_b() -> Suite:
                 obj_eid == exp_obj and iobj_eid == exp_iobj,
                 f"obj={obj_eid} iobj={iobj_eid}")
 
-    # B2: synonym in cellar context
+    # B2: synonym in bedroom context (lamp moved from cellar)
     w = fresh()
-    w.player.location = "cellar"
+    w.player.location = "bedroom_east"
     out, p = cmd(w, "retrieve the lamp")
     s.check('B2: "retrieve the lamp" -> takes lamp',
             "oil_lamp" in w.player.inventory and p is None, out)
@@ -1319,6 +1326,8 @@ def test_npc_jasper() -> Suite:
     NPC_MEMORY.reputation("jasper").disconfirmations = 4.0
     s.check("devoted disposition confirmed",
             NPC_MEMORY.disposition("jasper") == "devoted")
+    import random as _rnd
+    _rnd.seed(1)  # seed avoids the 5% devoted wander firing
     w.player.location = "hall_2"
     cmd(w, "go south")  # hall_2 -> hall_1
     s.check("devoted jasper follows to hall_1",
@@ -1648,6 +1657,136 @@ def test_parser_fixes() -> Suite:
 
 
 # ============================================================
+# SECTION 13 — World expansion (upstairs, gatehouse, forest)  [symbolic]
+# ============================================================
+
+def test_world_expansion() -> Suite:
+    s = Suite("SECTION 13 — World expansion")
+
+    # ── Room existence ────────────────────────────────────────
+    w = fresh()
+    for rid in ["upstairs_landing", "bedroom_east", "bedroom_west",
+                "gatehouse_interior", "cobbled_road", "forest_path",
+                "bridge", "forest_edge",
+                "forest_a", "forest_b", "forest_c", "forest_d"]:
+        s.check(f"{rid} exists", rid in w.rooms, rid)
+
+    # ── Connection integrity ──────────────────────────────────
+    s.check("foyer up -> upstairs_landing",
+            w.rooms["foyer"].exits.get("up") == "upstairs_landing")
+    s.check("upstairs_landing down -> foyer",
+            w.rooms["upstairs_landing"].exits.get("down") == "foyer")
+    s.check("upstairs_landing east -> bedroom_east",
+            w.rooms["upstairs_landing"].exits.get("east") == "bedroom_east")
+    s.check("upstairs_landing west -> bedroom_west",
+            w.rooms["upstairs_landing"].exits.get("west") == "bedroom_west")
+    s.check("gatehouse east -> gatehouse_interior",
+            w.rooms["gatehouse"].exits.get("east") == "gatehouse_interior")
+    s.check("road chain: interior->road->path->bridge",
+            w.rooms["gatehouse_interior"].exits.get("east") == "cobbled_road" and
+            w.rooms["cobbled_road"].exits.get("east") == "forest_path" and
+            w.rooms["forest_path"].exits.get("east") == "bridge")
+    s.check("bridge has no east exit (placeholder)",
+            "east" not in w.rooms["bridge"].exits)
+    s.check("wooded_path west -> forest_edge",
+            w.rooms["wooded_path"].exits.get("west") == "forest_edge")
+
+    # ── Item locations ────────────────────────────────────────
+    s.check("oil_lamp in bedroom_east",
+            w.entities["oil_lamp"].location == "bedroom_east")
+    s.check("lamp_oil in gatehouse_interior",
+            w.entities["lamp_oil"].location == "gatehouse_interior")
+    s.check("can_opener in kitchen",
+            w.entities["can_opener"].location == "kitchen")
+
+    # ── Jasper home_rooms include upstairs ────────────────────
+    from npc import JASPER
+    s.check("upstairs_landing in jasper home_rooms",
+            "upstairs_landing" in JASPER.home_rooms)
+    s.check("bedroom_east in jasper home_rooms",
+            "bedroom_east" in JASPER.home_rooms)
+    s.check("bedroom_west in jasper home_rooms",
+            "bedroom_west" in JASPER.home_rooms)
+
+    # ── Navigation ────────────────────────────────────────────
+    w = fresh(); w.player.location = "foyer"
+    cmd(w, "go up")
+    s.check("go up -> upstairs_landing", w.player.location == "upstairs_landing")
+    cmd(w, "go down")
+    s.check("go down -> foyer", w.player.location == "foyer")
+    cmd(w, "go upstairs")
+    s.check("go upstairs idiom", w.player.location == "upstairs_landing")
+
+    w = fresh(); w.player.location = "entryway"
+    cmd(w, "go east")   # -> gatehouse
+    cmd(w, "go east")   # -> gatehouse_interior
+    cmd(w, "go east")   # -> cobbled_road
+    cmd(w, "go east")   # -> forest_path
+    cmd(w, "go east")   # -> bridge
+    s.check("full road chain navigable", w.player.location == "bridge")
+    out, _ = cmd(w, "go east")  # bridge east blocked
+    s.check("bridge east blocked",
+            w.player.location == "bridge" and
+            "can't" in out.lower(), out)
+
+    w = fresh(); w.player.location = "wooded_path"
+    cmd(w, "go west")   # -> forest_edge
+    s.check("wooded_path -> forest_edge", w.player.location == "forest_edge")
+    cmd(w, "go north")  # -> forest_a
+    s.check("forest_edge -> forest_a", w.player.location == "forest_a")
+
+    # ── Forest maze: all four rooms reachable from edge ───────
+    reachable = set()
+    w = fresh(); w.player.location = "forest_edge"
+    for direction in ["north", "west", "south"]:
+        w2 = fresh(); w2.player.location = "forest_edge"
+        cmd(w2, f"go {direction}")
+        reachable.add(w2.player.location)
+    s.check("three directions from edge reach three maze rooms",
+            len(reachable) == 3 and all(r.startswith("forest_") for r in reachable))
+
+    # ── Servants staircase ───────────────────────────────────
+    w = fresh()
+    s.check("hall_2 up -> upstairs_landing",
+            w.rooms["hall_2"].exits.get("up") == "upstairs_landing")
+    s.check("upstairs_landing south -> hall_2",
+            w.rooms["upstairs_landing"].exits.get("south") == "hall_2")
+    s.check("upstairs_landing down -> foyer (main stair)",
+            w.rooms["upstairs_landing"].exits.get("down") == "foyer")
+    s.check("servants_stair entity in hall_2",
+            "servants_stair" in w.rooms["hall_2"].entities)
+
+    # Jasper can wander from hall_2 to upstairs via servants stair
+    from npc import _choose_wander_destination, JASPER, JASPER_EVENTS as _JE
+    import engine as _engine
+    import random as _rnd
+    _engine._NPC_INSTANCES.clear()
+    _engine.NPC_MEMORY._store.clear()
+    _engine.NPC_MEMORY.register_events("jasper", _JE)
+    w2 = build_demo_world()
+    npcs2 = _engine.get_npc_instances(w2)
+    jasper2 = npcs2["jasper"]
+    jasper2.location = "hall_2"
+    _rnd.seed(42)
+    dests = set(_choose_wander_destination(jasper2, w2) for _ in range(50))
+    dests.discard(None)
+    s.check("jasper wander from hall_2 includes upstairs_landing",
+            "upstairs_landing" in dests, str(dests))
+    s.check("jasper wander stays in home_rooms",
+            all(d in JASPER.home_rooms for d in dests),
+            str(dests - JASPER.home_rooms))
+
+    # ── Puzzle: items needed before lamp useful ───────────────
+    # Player must fetch lamp from bedroom_east and oil from gatehouse_interior
+    w = fresh(); w.player.location = "bedroom_east"
+    out, _ = cmd(w, "take lamp")
+    s.check("lamp takeable in bedroom_east",
+            "oil_lamp" in w.player.inventory, out)
+
+    return s
+
+
+# ============================================================
 # Registry
 # ============================================================
 
@@ -1669,6 +1808,7 @@ SECTIONS: dict[str, tuple[Callable, Set[str]]] = {
     "npc_jasper":    (test_npc_jasper,              {"symbolic"}),
     "desc_fallback": (test_descriptive_noun_fallback, {"symbolic"}),
     "parser_fixes":  (test_parser_fixes,               {"symbolic"}),
+    "world_expansion":(test_world_expansion,            {"symbolic"}),
 }
 
 

@@ -57,10 +57,11 @@ def build_demo_world() -> World:
             desc=(
                 "You are standing in a small foyer. A dusty chandelier sulks overhead. "
                 "A heavy oak door to the north stands between you and the rest of the manor. "
-                "A narrow staircase descends to the west. To the south, the manor's "
-                "front entrance opens onto what appears to be an overgrown garden."
+                "A broad staircase to the west descends to the cellar and rises to the "
+                "upper floor. To the south, the manor's front entrance opens onto what "
+                "appears to be an overgrown garden."
             ),
-            exits={"west": "cellar", "south": "entryway"}
+            exits={"west": "cellar", "south": "entryway", "up": "upstairs_landing"}
             # NOTE: "north" is added dynamically when the oak door is opened.
         ),
         # The original single hall is now three sections running north-south.
@@ -84,9 +85,10 @@ def build_demo_world() -> World:
             desc=(
                 "The central stretch of the manor hall. Portraits of stern-faced ancestors "
                 "line the walls, their painted eyes tracking you with practised disapproval. "
+                "A narrow servants' staircase rises to the upper floor in the corner. "
                 "The hall continues north and south."
             ),
-            exits={"north": "hall_3", "south": "hall_1"}
+            exits={"north": "hall_3", "south": "hall_1", "up": "upstairs_landing"}
         ),
         "hall_3": Room(
             rid="hall_3",
@@ -157,11 +159,10 @@ def build_demo_world() -> World:
             desc=(
                 "The old gatehouse straddles what was once the main carriage road. Its "
                 "portcullis has long since rusted open, the road beyond it disappearing "
-                "into trees. Whatever traffic once passed through here has not done so "
-                "in a very long time. The garden lies to the west."
+                "into trees. An arched passage leads east through the gatehouse itself. "
+                "The garden lies to the west."
             ),
-            exits={"west": "entryway"}
-            # NOTE: Future expansion — east exit leads away from the manor.
+            exits={"west": "entryway", "east": "gatehouse_interior"}
         ),
         "wooded_path": Room(
             rid="wooded_path",
@@ -172,9 +173,162 @@ def build_demo_world() -> World:
                 "into deepening shadow. Behind you to the east, the overgrown garden "
                 "is still visible."
             ),
-            exits={"east": "entryway"}
-            # NOTE: Future expansion — west exit leads further into the woods.
+            exits={"east": "entryway", "west": "forest_edge"}
         ),
+        # ── UPSTAIRS ─────────────────────────────────────────────────────
+        # Accessible via "up" from the foyer staircase.
+        # The cat's home_rooms include these rooms.
+        "upstairs_landing": Room(
+            rid="upstairs_landing",
+            title="Upper Landing",
+            desc=(
+                "A wide landing connecting both staircases. The floorboards "
+                "creak underfoot. Two doors lead off the landing — one to the east "
+                "and one to the west. The main staircase descends to the foyer; "
+                "a narrow servants' stair drops back down to the central hall."
+            ),
+            exits={"down": "foyer", "south": "hall_2",
+                   "east": "bedroom_east", "west": "bedroom_west"}
+        ),
+        "bedroom_east": Room(
+            rid="bedroom_east",
+            title="East Bedroom",
+            desc=(
+                "A modest bedroom, cold and long unslept-in. A brass bed frame "
+                "stands against one wall, its mattress collapsed and mouse-eaten. "
+                "A nightstand beside the bed still holds a few objects. "
+                "The landing lies to the west."
+            ),
+            exits={"west": "upstairs_landing"}
+        ),
+        "bedroom_west": Room(
+            rid="bedroom_west",
+            title="West Bedroom",
+            desc=(
+                "A larger bedroom at the corner of the manor. Mildew has claimed "
+                "most of the wallpaper, leaving dark patches across the plaster. "
+                "A wardrobe stands against the far wall, its door hanging open "
+                "on a broken hinge. The landing lies to the east."
+            ),
+            exits={"east": "upstairs_landing"}
+        ),
+
+        # ── GATEHOUSE INTERIOR AND ROAD ───────────────────────────────────
+        "gatehouse_interior": Room(
+            rid="gatehouse_interior",
+            title="Gatehouse Interior",
+            desc=(
+                "The inside of the gatehouse is a single vaulted room, its stone "
+                "floor worn smooth by centuries of foot traffic. Rusted iron "
+                "mechanisms for the portcullis take up one wall. A heavy timber "
+                "shelf along another wall holds various old stores. Arrow slits "
+                "let in thin bars of light. The arched passage leads west back "
+                "toward the garden; the road continues east."
+            ),
+            exits={"west": "gatehouse", "east": "cobbled_road"}
+        ),
+        "cobbled_road": Room(
+            rid="cobbled_road",
+            title="Cobbled Road",
+            desc=(
+                "The old carriage road stretches east and west, its cobblestones "
+                "heaved and split by decades of neglect. Weeds push through every "
+                "gap. The gatehouse lies to the west; the road disappears into "
+                "forest shadow to the east."
+            ),
+            exits={"west": "gatehouse_interior", "east": "forest_path"}
+        ),
+        "forest_path": Room(
+            rid="forest_path",
+            title="Forest Path",
+            desc=(
+                "The cobbled road gives way to a dirt path where the forest closes "
+                "in on both sides. The trees are old and densely planted, blocking "
+                "most of the sky. The road back west is just visible through the "
+                "trunks. To the east the path descends toward the sound of water."
+            ),
+            exits={"west": "cobbled_road", "east": "bridge"}
+        ),
+        "bridge": Room(
+            rid="bridge",
+            title="Old Bridge",
+            desc=(
+                "A stone bridge arches over a fast-moving stream. The far bank is "
+                "obscured by mist and overgrowth — whatever lies beyond is not "
+                "visible from here. The bridge itself looks intact, but something "
+                "about the far side discourages crossing. The forest path leads "
+                "back west."
+            ),
+            exits={"west": "forest_path"}
+            # NOTE: east exit to be added in future content expansion.
+        ),
+
+        # ── FOREST MAZE ───────────────────────────────────────────────────
+        # Entry point from wooded_path. Distinct enough that the player
+        # can recognise it as the way out.
+        "forest_edge": Room(
+            rid="forest_edge",
+            title="Forest Edge",
+            desc=(
+                "The path from the manor dissolves here into trackless woodland. "
+                "A faint trail is still visible heading east through the trees. "
+                "Behind you to the east, the wooded path back toward the manor "
+                "is just visible."
+            ),
+            exits={"east": "wooded_path", "north": "forest_a",
+                   "west": "forest_b", "south": "forest_c"}
+        ),
+        # Four maze rooms. Exits are deliberately non-reciprocal so that
+        # going north then south does not always return the player to where
+        # they started. All rooms have similar descriptions by design —
+        # the player is supposed to feel disoriented.
+        "forest_a": Room(
+            rid="forest_a",
+            title="Deep Forest",
+            desc=(
+                "You are lost in the forest. Your sense of direction has become "
+                "scrambled. The trees look the same in every direction — "
+                "tall, grey-barked, silent. The light that filters through the "
+                "canopy gives no indication of where the sun is."
+            ),
+            exits={"north": "forest_b", "south": "forest_c",
+                   "east": "forest_b", "west": "forest_d"}
+        ),
+        "forest_b": Room(
+            rid="forest_b",
+            title="Deep Forest",
+            desc=(
+                "You are lost in the forest. Your sense of direction has become "
+                "scrambled. A fallen log lies across what might be a path, "
+                "though it is impossible to say which direction it runs."
+            ),
+            exits={"north": "forest_d", "south": "forest_a",
+                   "east": "forest_c", "west": "forest_a"}
+        ),
+        "forest_c": Room(
+            rid="forest_c",
+            title="Deep Forest",
+            desc=(
+                "You are lost in the forest. Your sense of direction has become "
+                "scrambled. The undergrowth is thicker here. Something "
+                "has disturbed the leaf litter recently, but you cannot tell "
+                "what — or from which direction it came."
+            ),
+            exits={"north": "forest_a", "south": "forest_d",
+                   "east": "forest_d", "west": "forest_b"}
+        ),
+        "forest_d": Room(
+            rid="forest_d",
+            title="Deep Forest",
+            desc=(
+                "You are lost in the forest. Your sense of direction has become "
+                "scrambled. A pale fungus grows on the bark of a nearby tree. "
+                "The silence here is deeper than it should be."
+            ),
+            exits={"north": "forest_c", "south": "forest_b",
+                   "east": "forest_a", "west": "forest_c"}
+        ),
+
         # Kitchen — west of the cellar passage; accessible only after
         # the lever puzzle opens the north wall of hall_3.
         # The cat cannot reach this room (not in its home_rooms).
@@ -857,7 +1011,7 @@ def build_demo_world() -> World:
                 "lit": False,
                 "fuelled": False,
             },
-            location="cellar"
+            location="bedroom_east"
         ),
         # Flask of lamp oil — consumed (empty=True) when used to fill the lamp.
         "lamp_oil": Entity(
@@ -871,7 +1025,7 @@ def build_demo_world() -> World:
                 "liquid": "oil",
                 "empty": False,
             },
-            location="cellar"
+            location="gatehouse_interior"
         ),
         # The clay ewer holds water for Puzzle 3.
         # It has "requires_light": True — only visible when carrying a lit lamp.
@@ -944,6 +1098,202 @@ def build_demo_world() -> World:
                 "worn": False,
             },
             location="display_case"
+        ),
+
+        # ======================================================
+        # UPSTAIRS ENTITIES
+        # ======================================================
+
+        "servants_stair": Entity(
+            eid="servants_stair",
+            name="the servants' staircase",
+            aliases=["servants stair", "servants staircase", "narrow stair",
+                     "back stair", "back stairs", "narrow stairs",
+                     "staircase", "stairs", "stair"],
+            tags={"scenery"},
+            props={"desc": (
+                "A narrow staircase tucked into the corner of the hall. "
+                "The treads are bare wood, worn smooth in the centre from long use. "
+                "It rises steeply to the upper floor."
+            )},
+            location="hall_2"
+        ),
+        "upstairs_nightstand": Entity(
+            eid="upstairs_nightstand",
+            name="the nightstand",
+            aliases=["nightstand", "night stand", "bedside table",
+                     "side table", "small table"],
+            tags={"scenery"},
+            props={"desc": (
+                "A small wooden nightstand beside the bed. Its surface is dusty "
+                "but a few objects remain on top — someone left in a hurry, or "
+                "simply stopped coming back."
+            )},
+            location="bedroom_east"
+        ),
+        "upstairs_wardrobe": Entity(
+            eid="upstairs_wardrobe",
+            name="the wardrobe",
+            aliases=["wardrobe", "armoire", "cupboard", "closet"],
+            tags={"scenery"},
+            props={"desc": (
+                "A tall oak wardrobe, its door hanging open on a broken hinge. "
+                "The interior holds nothing but a few bent coat hangers and the "
+                "smell of old cedar."
+            )},
+            location="bedroom_west"
+        ),
+        "upstairs_bed": Entity(
+            eid="upstairs_bed",
+            name="the bed frame",
+            aliases=["bed", "bed frame", "brass bed", "bedframe"],
+            tags={"scenery"},
+            props={"desc": (
+                "A brass bed frame, tarnished green with age. The mattress has "
+                "long since collapsed into a heap of fabric and horsehair."
+            )},
+            location="bedroom_east"
+        ),
+        "upstairs_window": Entity(
+            eid="upstairs_window",
+            name="the window",
+            aliases=["window", "windowsill", "sill"],
+            tags={"scenery"},
+            props={"desc": (
+                "A tall sash window, its glass thick and wavy with age. Below, "
+                "you can see the overgrown garden and, beyond it, the gatehouse "
+                "and the road disappearing into the trees."
+            )},
+            location="upstairs_landing"
+        ),
+
+        # ======================================================
+        # GATEHOUSE AND ROAD ENTITIES
+        # ======================================================
+
+        "gatehouse_portcullis": Entity(
+            eid="gatehouse_portcullis",
+            name="the portcullis",
+            aliases=["portcullis", "iron gate", "gate", "rusted gate",
+                     "iron portcullis", "rusted portcullis"],
+            tags={"scenery"},
+            props={"desc": (
+                "A heavy iron portcullis, its teeth pointing downward, frozen "
+                "in the open position by a century of rust. The mechanism that "
+                "once raised and lowered it is visible through the arch above — "
+                "a system of chains and counterweights, all seized solid."
+            )},
+            location="gatehouse"
+        ),
+        "gatehouse_mechanism": Entity(
+            eid="gatehouse_mechanism",
+            name="the portcullis mechanism",
+            aliases=["mechanism", "winch", "chains", "counterweights",
+                     "iron mechanism", "portcullis mechanism"],
+            tags={"scenery"},
+            props={"desc": (
+                "A complex arrangement of iron wheels, chains, and counterweights "
+                "for raising and lowering the portcullis. Every moving part has "
+                "seized with rust. It has not moved in a very long time."
+            )},
+            location="gatehouse_interior"
+        ),
+        "gatehouse_shelf": Entity(
+            eid="gatehouse_shelf",
+            name="the timber shelf",
+            aliases=["shelf", "timber shelf", "shelves", "stores",
+                     "old shelf", "wooden shelf"],
+            tags={"scenery"},
+            props={"desc": (
+                "A heavy timber shelf running the length of one wall. Whatever "
+                "was stored here has long since been used, spoiled, or taken. "
+                "A few containers remain — a flask of lamp oil among them."
+            )},
+            location="gatehouse_interior"
+        ),
+        "bridge_stream": Entity(
+            eid="bridge_stream",
+            name="the stream",
+            aliases=["stream", "water", "river", "brook", "current"],
+            tags={"scenery"},
+            props={"desc": (
+                "The stream runs fast and clear over mossy stones far below. "
+                "It looks cold. There is no obvious way down to it from here."
+            )},
+            location="bridge"
+        ),
+        "bridge_far_bank": Entity(
+            eid="bridge_far_bank",
+            name="the far bank",
+            aliases=["far bank", "far side", "other side", "other bank",
+                     "mist", "overgrowth", "far shore"],
+            tags={"scenery"},
+            props={"desc": (
+                "The far bank is hidden in low mist. You can make out "
+                "dense vegetation and what might be a structure further back, "
+                "but the details are unclear. Something about crossing feels "
+                "inadvisable, though you cannot say exactly why."
+            )},
+            location="bridge"
+        ),
+
+        # ======================================================
+        # FOREST ENTITIES
+        # ======================================================
+
+        "forest_trees": Entity(
+            eid="forest_trees",
+            name="the trees",
+            aliases=["trees", "tree", "forest", "woods", "woodland",
+                     "canopy", "branches", "trunks", "bark"],
+            tags={"scenery"},
+            props={"desc": (
+                "Grey-barked and ancient, the trees crowd close on every side. "
+                "Their branches interlace overhead, blocking direct sunlight. "
+                "There is nothing distinctive about any of them."
+            )},
+            location="forest_a"
+        ),
+        "forest_log": Entity(
+            eid="forest_log",
+            name="a fallen log",
+            aliases=["log", "fallen log", "fallen tree", "dead tree"],
+            tags={"scenery"},
+            props={"desc": (
+                "A large tree, long fallen, its bark soft with rot and "
+                "covered in pale lichen. It lies at an angle that suggests "
+                "a path, but following it leads nowhere useful."
+            )},
+            location="forest_b"
+        ),
+        "forest_fungus": Entity(
+            eid="forest_fungus",
+            name="the pale fungus",
+            aliases=["fungus", "mushroom", "mushrooms", "pale fungus",
+                     "fungal growth", "lichen"],
+            tags={"scenery"},
+            props={"desc": (
+                "A large bracket fungus, pale as bone, growing from the bark of "
+                "a nearby tree. It is entirely unremarkable — just another part "
+                "of a forest that all looks the same."
+            )},
+            location="forest_d"
+        ),
+
+        # ======================================================
+        # CAN OPENER
+        # ======================================================
+
+        "can_opener": Entity(
+            eid="can_opener",
+            name="a can opener",
+            aliases=["can opener", "opener", "tin opener", "tin key"],
+            tags={"portable"},
+            props={"desc": (
+                "A sturdy steel can opener, old but functional. Someone kept "
+                "it in the kitchen for a reason."
+            )},
+            location="kitchen"
         ),
 
         # ======================================================

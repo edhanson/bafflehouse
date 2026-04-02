@@ -635,7 +635,8 @@ JASPER = NPCDefinition(
     npc_id       = "jasper",
     name         = "a grey cat",
     proper_name  = "Jasper",
-    home_rooms   = {"hall_1", "hall_2", "hall_3", "library"},
+    home_rooms   = {"hall_1", "hall_2", "hall_3", "library",
+                    "upstairs_landing", "bedroom_east", "bedroom_west"},
     start_room   = "hall_2",
     wander_chance= 0.4,
     accepts_at   = {
