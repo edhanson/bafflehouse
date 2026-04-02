@@ -754,7 +754,7 @@ def test_parser_improvement_a() -> Suite:
             ground(w, "put the heavy key in the wooden crate", "obj") == "iron_key")
 
     w = fresh()
-    w.player.location = "cellar"
+    w.player.location = "bedroom_east"  # lamp moved from cellar
     s.check("examine the tin lamp -> oil_lamp",
             ground(w, "examine the tin lamp") == "oil_lamp")
 
