@@ -260,7 +260,22 @@ def build_demo_world() -> World:
                 "back west."
             ),
             exits={"west": "forest_path"}
-            # NOTE: east exit to be added in future content expansion.
+            # NOTE: east exit added dynamically when troll puzzle is solved.
+        ),
+        # Stub room — placeholder for future content beyond the bridge.
+        # Accessible only after solving the troll's riddles.
+        "bridge_far_bank": Room(
+            rid="bridge_far_bank",
+            title="Far Bank",
+            desc=(
+                "You cross to the far bank. The mist closes in behind you almost "
+                "immediately, and the world beyond the bridge feels different — "
+                "quieter, older, and somehow further from the manor than the "
+                "distance warrants. A dense wall of vegetation blocks further "
+                "progress. The bridge lies back to the west."
+            ),
+            exits={"west": "bridge"}
+            # NOTE: further exits to be added in future content expansion.
         ),
 
         # ── FOREST MAZE ───────────────────────────────────────────────────
@@ -1211,6 +1226,21 @@ def build_demo_world() -> World:
                 "A few containers remain — a flask of lamp oil among them."
             )},
             location="gatehouse_interior"
+        ),
+        "troll": Entity(
+            eid="troll",
+            name="the troll",
+            aliases=["troll", "bridge troll", "creature", "guard"],
+            tags={"scenery"},   # not portable, not npc-system — handled by troll.py
+            props={
+                "desc": (
+                    "It is large. Larger than seems reasonable, really. Its skin "
+                    "is the same grey as the bridge stones, which probably is not "
+                    "a coincidence. It watches you with small, clever eyes that "
+                    "do not miss much."
+                ),
+            },
+            location="bridge"
         ),
         "bridge_stream": Entity(
             eid="bridge_stream",

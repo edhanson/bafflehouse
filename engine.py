@@ -22,6 +22,10 @@ from typing import Callable, Dict, List, Optional, Tuple
 from ir import clarify_ir
 from model import World
 from npc import NPC, NPC_REGISTRY, npc_tick, handle_pet_npc, handle_feed_npc, handle_offer_npc, handle_call_npc
+from troll import (
+    TrollMemory, troll_encounter, handle_troll_answer,
+    TROLL_EXAMINE, TROLL_BLOCKS,
+)
 from npc_bayesian import NPCMemory
 from parser import (
     DIRECTIONS,
@@ -40,6 +44,7 @@ from parser import (
 
 # Persistent memory store — loaded from npc_memory.json on first access.
 NPC_MEMORY = NPCMemory("./npc_memory.json")
+TROLL_MEMORY = TrollMemory()
 
 # Register Jasper's custom event table before any reputation is loaded.
 from npc import JASPER_EVENTS
@@ -467,6 +472,16 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     # the hedges sets it True so the entity becomes findable and takeable.
     # For NPC entities: append a disposition-sensitive observation that
     # hints at how to interact without spelling it out explicitly.
+    if obj == "troll":
+        state = TROLL_MEMORY.state()
+        if state.bridge_open:
+            key = "bridge_open"
+        elif state.correct_count > 0:
+            key = "in_progress"
+        else:
+            key = "not_started"
+        return TROLL_EXAMINE.get(key, "You see a troll."), False
+
     if "npc" in ent.tags:
         disposition = NPC_MEMORY.disposition(obj)
         npc_examine_suffix = {
@@ -1784,6 +1799,32 @@ def handle_attack(world: World, ir: dict) -> Tuple[str, bool]:
 # Handler dispatch table
 # ============================================================
 
+def handle_answer(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Player answers the troll's riddle.
+
+    The raw answer text is passed to troll.handle_troll_answer, which
+    normalises it and checks against each riddle's accepted-answer list.
+    If the bridge is newly opened, the east exit is added to the bridge room.
+    """
+    if world.player.location != "bridge":
+        return "There is nothing here to answer.", False
+
+    answer_text = ir.get("obj") or ir.get("raw") or ""
+    if not answer_text:
+        return "Answer what, exactly?", False
+
+    state = TROLL_MEMORY.state()
+    response, correct = handle_troll_answer(state, str(answer_text))
+
+    # Open bridge east exit the moment the last riddle is answered correctly.
+    if state.bridge_open and "east" not in world.rooms["bridge"].exits:
+        world.rooms["bridge"].exits["east"] = "bridge_far_bank"
+
+    TROLL_MEMORY.save()
+    return response, True
+
+
 ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     # Original verbs
     "go":         handle_go,
@@ -1816,6 +1857,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "feed":       handle_feed,
     "offer":      handle_offer,
     "call":       handle_call,
+    "answer":     handle_answer,
 }
 
 
@@ -2004,5 +2046,14 @@ def process_input(
             outputs.extend(npc_msgs)
         # Persist trust changes after every consumed action.
         NPC_MEMORY.save()
+
+        # Troll tick: runs when player is at the bridge.
+        if world.player.location == "bridge":
+            troll_msgs = troll_encounter(
+                state        = TROLL_MEMORY.state(),
+                player_moved = player_moved,
+            )
+            outputs.extend(troll_msgs)
+            TROLL_MEMORY.save()
 
     return "\n".join(outputs), None

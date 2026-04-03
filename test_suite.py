@@ -1799,6 +1799,127 @@ def test_world_expansion() -> Suite:
 
 
 # ============================================================
+# SECTION 14 — Troll NPC (bridge riddle)  [symbolic]
+# ============================================================
+
+def test_troll() -> Suite:
+    import pathlib as _pl
+    import random as _rnd
+    import engine as _eng
+    from troll import (
+        TrollMemory as _TM, check_answer as _ca,
+        get_riddle_by_id as _gri, RIDDLES_TO_PASS as _RTP,
+    )
+
+    s = Suite("SECTION 14 — Troll NPC")
+
+    def troll_fresh():
+        """Return a fresh world with player at bridge and troll memory reset."""
+        _eng._NPC_INSTANCES.clear()
+        _pl.Path("./troll_memory.json").unlink(missing_ok=True)
+        _pl.Path("./npc_memory.json").unlink(missing_ok=True)
+        _eng.NPC_MEMORY._store.clear()
+        from npc import JASPER_EVENTS as _JEV
+        _eng.NPC_MEMORY.register_events("jasper", _JEV)
+        _eng.TROLL_MEMORY.reset()
+        w = build_demo_world()
+        w.player.location = "bridge"
+        return w
+
+    # ── Entity and world structure ────────────────────────────
+    w = troll_fresh()
+    s.check("troll entity at bridge", "troll" in w.rooms["bridge"].entities)
+    s.check("bridge has no east exit initially",
+            "east" not in w.rooms["bridge"].exits)
+
+    # ── Troll tick poses a riddle ─────────────────────────────
+    w = troll_fresh()
+    _rnd.seed(42)
+    cmd(w, "examine stream")  # triggers tick
+    s.check("riddle is posed after tick",
+            _eng.TROLL_MEMORY.state().current_rid is not None)
+
+    # ── Answer normalisation ──────────────────────────────────
+    r01 = _gri("r01")  # "a map"
+    s.check("bare answer accepted",        _ca(r01, "map"))
+    s.check("article accepted",            _ca(r01, "a map"))
+    s.check("preamble stripped",           _ca(r01, "the answer is a map"))
+    s.check("i think it is stripped",      _ca(r01, "i think it is a map"))
+    s.check("wrong answer rejected",       not _ca(r01, "banana"))
+    r02 = _gri("r02")  # "footsteps"
+    s.check("synonym accepted (steps)",    _ca(r02, "steps"))
+    r03 = _gri("r03")  # "an echo"
+    s.check("echo accepted",               _ca(r03, "echo"))
+    r05 = _gri("r05")  # "a clock"
+    s.check("watch accepted as clock",     _ca(r05, "watch"))
+
+    # ── Wrong answer: troll gloats ────────────────────────────
+    w = troll_fresh()
+    state = _eng.TROLL_MEMORY.state()
+    state.current_rid = "r01"
+    out, _ = cmd(w, "answer banana")
+    s.check("wrong answer: gloat message",
+            any(x in out.lower() for x in
+                ["wrong", "no", "not right", "ohhh", "close"]), out)
+    s.check("wrong answer: weight increases",
+            _eng.TROLL_MEMORY.state().weights.get("r01", 1.0) > 1.0)
+
+    # ── Correct answer ────────────────────────────────────────
+    w = troll_fresh()
+    state = _eng.TROLL_MEMORY.state()
+    state.current_rid = "r01"
+    out, _ = cmd(w, "answer a map")
+    s.check("correct answer: success message",
+            any(x in out.lower() for x in
+                ["correct", "right", "hm", "recalculating"]), out)
+    s.check("correct_count incremented",
+            _eng.TROLL_MEMORY.state().correct_count == 1)
+    s.check("solved list updated",
+            "r01" in _eng.TROLL_MEMORY.state().solved)
+    s.check("solved riddle weight zeroed",
+            _eng.TROLL_MEMORY.state().weights.get("r01", 1.0) == 0.0)
+
+    # ── Full progression: 3 correct opens bridge ──────────────
+    w = troll_fresh()
+    _answers = {"r01": "map", "r02": "footsteps", "r03": "echo"}
+    for rid, ans in _answers.items():
+        _eng.TROLL_MEMORY.state().current_rid = rid
+        _eng.TROLL_MEMORY.save()
+        cmd(w, f"answer {ans}")
+    s.check("bridge opens after 3 correct",
+            _eng.TROLL_MEMORY.state().bridge_open)
+    s.check("east exit added to bridge room",
+            "east" in w.rooms["bridge"].exits)
+
+    # ── Weighted sampler never picks solved riddles ───────────
+    w = troll_fresh()
+    state = _eng.TROLL_MEMORY.state()
+    state.solved = ["r01", "r02"]
+    state.weights["r01"] = 0.0
+    state.weights["r02"] = 0.0
+    _rnd.seed(7)
+    picks = set()
+    for _ in range(30):
+        r = state.pick_riddle()
+        if r: picks.add(r.rid)
+    s.check("solved riddles not re-asked",
+            "r01" not in picks and "r02" not in picks, str(picks))
+
+    # ── Examine troll ─────────────────────────────────────────
+    w = troll_fresh()
+    out, _ = cmd(w, "examine troll")
+    s.check("examine troll: description returned",
+            any(x in out.lower() for x in
+                ["large", "grey", "eyes", "skin"]), out)
+
+    # Cleanup
+    _pl.Path("./troll_memory.json").unlink(missing_ok=True)
+    _pl.Path("./npc_memory.json").unlink(missing_ok=True)
+
+    return s
+
+
+# ============================================================
 # Registry
 # ============================================================
 
@@ -1821,6 +1942,7 @@ SECTIONS: dict[str, tuple[Callable, Set[str]]] = {
     "desc_fallback": (test_descriptive_noun_fallback, {"symbolic"}),
     "parser_fixes":  (test_parser_fixes,               {"symbolic"}),
     "world_expansion":(test_world_expansion,            {"symbolic"}),
+    "troll":          (test_troll,                      {"symbolic"}),
 }
 
 

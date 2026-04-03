@@ -13,6 +13,7 @@ models/
 
 # ── NPC runtime state (player-specific, not versioned) ───────
 npc_memory.json
+troll_memory.json
 combat_memory.json
 
 # ── Python bytecode and caches ────────────────────────────────

@@ -378,6 +378,20 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         ],
         shape="verb_obj",
     ),
+    # ANSWER — respond to a riddle or question.
+    # The "object" is the free-form answer text, not an entity.
+    # Handled specially in engine.py: raw text passed to troll module.
+    "answer": VerbDefinition(
+        verb_id="answer",
+        literal_forms=["answer", "reply", "respond", "say",
+                       "the answer is", "my answer is"],
+        semantic_examples=[
+            "answer the riddle",
+            "reply to the question",
+            "the answer is footsteps",
+        ],
+        shape="verb_obj",
+    ),
 
     # ATTACK/KICK — hostile action against an NPC or object.
     # Routes to handle_attack in engine; for NPCs this damages trust.
