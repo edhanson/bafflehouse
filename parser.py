@@ -393,6 +393,18 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         shape="verb_obj",
     ),
 
+    # BLOCK — declare a shield-based defensive action in combat.
+    "block": VerbDefinition(
+        verb_id="block",
+        literal_forms=["block", "shield", "parry", "defend", "guard"],
+        semantic_examples=[
+            "block an attack",
+            "raise my shield",
+            "parry the blow",
+        ],
+        shape="verb_obj",
+    ),
+
     # ATTACK/KICK — hostile action against an NPC or object.
     # Routes to handle_attack in engine; for NPCs this damages trust.
     "attack": VerbDefinition(
@@ -1323,6 +1335,10 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "whisper to":   "call",
     "say to":       "call",
 
+    # block-family
+    "shield":      "block",
+    "parry":       "block",
+    "deflect":     "block",
     # attack-family (additional)
     "strike at":    "attack",
     "swing at":     "attack",

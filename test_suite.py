@@ -1920,6 +1920,189 @@ def test_troll() -> Suite:
 
 
 # ============================================================
+# SECTION 15 — Combat system (slime golem)  [symbolic]
+# ============================================================
+
+def test_combat() -> Suite:
+    import pathlib as _pl
+    import random as _rnd
+    import engine as _eng
+    from combat import (
+        CombatSession, start_combat, process_player_combat_action,
+        WEAPON_STATS,
+    )
+    from npc_qlearning import CombatMemory as _CM
+
+    s = Suite("SECTION 15 — Combat system")
+
+    def combat_fresh():
+        """World with combat memory reset and player at vault."""
+        _eng._NPC_INSTANCES.clear()
+        _pl.Path("./npc_memory.json").unlink(missing_ok=True)
+        _pl.Path("./combat_memory.json").unlink(missing_ok=True)
+        _eng.NPC_MEMORY._store.clear()
+        from npc import JASPER_EVENTS as _JEV
+        _eng.NPC_MEMORY.register_events("jasper", _JEV)
+        _eng.COMBAT_MEMORY = _CM()
+        _eng._COMBAT_SESSION = None
+        w = build_demo_world()
+        # Open vault manually for testing
+        w.rooms["cellar"].exits["south"] = "vault"
+        w.player.location = "vault"
+        return w
+
+    # ── World structure ───────────────────────────────────────
+    w = build_demo_world()
+    s.check("vault room exists", "vault" in w.rooms)
+    s.check("vault north -> cellar",
+            w.rooms["vault"].exits.get("north") == "cellar")
+    s.check("cellar south absent at start",
+            "south" not in w.rooms["cellar"].exits)
+    s.check("slime_golem entity exists",
+            "slime_golem" in w.entities)
+    s.check("golem starts in vault",
+            w.entities["slime_golem"].location == "vault")
+    s.check("golem_remains starts hidden",
+            w.entities["golem_remains"].location == "hidden")
+    s.check("vault_door starts hidden",
+            w.entities["vault_door"].location == "hidden")
+
+    # ── Weapon stats ──────────────────────────────────────────
+    s.check("broadsword two_handed",
+            w.entities["broadsword"].props.get("two_handed") == True)
+    s.check("iron_mace two_handed",
+            w.entities["iron_mace"].props.get("two_handed") == True)
+    s.check("hunting_knife one_handed",
+            w.entities["hunting_knife"].props.get("two_handed") == False)
+    s.check("mace deals more base damage than knife",
+            WEAPON_STATS["iron_mace"]["damage_range"][0] >
+            WEAPON_STATS["hunting_knife"]["damage_range"][0])
+    s.check("mace costs more stamina than knife",
+            WEAPON_STATS["iron_mace"]["stamina_cost"] >
+            WEAPON_STATS["hunting_knife"]["stamina_cost"])
+
+    # ── Equipment exclusion ───────────────────────────────────
+    w2 = build_demo_world()
+    # Get broadsword into inventory
+    from engine import move_entity
+    move_entity(w2, "broadsword", "player")
+    move_entity(w2, "kite_shield", "player")
+    move_entity(w2, "hunting_knife", "player")
+    move_entity(w2, "chain_coif", "player")
+    w2.player.location = "trophy_room"
+    # Wear shield, then try to wield broadsword
+    cmd(w2, "wear shield")
+    s.check("shield worn", w2.entities["kite_shield"].props.get("worn"))
+    out, _ = cmd(w2, "wield broadsword")
+    s.check("two-handed weapon blocked while shield worn",
+            "two-handed" in out.lower() or "shield" in out.lower(), out)
+    s.check("broadsword not wielded",
+            w2.player.wielded_weapon != "broadsword")
+    # Remove shield, now wield broadsword
+    cmd(w2, "remove shield")
+    cmd(w2, "wield broadsword")
+    s.check("broadsword wielded after shield removed",
+            w2.player.wielded_weapon == "broadsword")
+    # Now try to wear shield while broadsword wielded
+    out, _ = cmd(w2, "wear shield")
+    s.check("shield blocked while two-handed weapon wielded",
+            "two-handed" in out.lower() or "shield" in out.lower(), out)
+    # Knife + shield: allowed
+    cmd(w2, "wield hunting knife")
+    cmd(w2, "wear shield")
+    s.check("knife + shield allowed",
+            w2.entities["kite_shield"].props.get("worn") and
+            w2.player.wielded_weapon == "hunting_knife")
+
+    # ── Combat session mechanics ──────────────────────────────
+    _rnd.seed(42)
+    session = CombatSession()
+    learner = _eng.COMBAT_MEMORY.learner("slime_golem")
+    # Attack with bare hands
+    narr, outcome = process_player_combat_action(session, "attack", learner)
+    s.check("attack produces narrative", len(narr) > 0)
+    s.check("attack outcome is continue or terminal",
+            outcome in ("continue","player_dead","golem_dead","fled","invalid"))
+    s.check("golem took damage from attack",
+            session.golem_hp < 120)
+
+    # Dodge: recovers stamina
+    session2 = CombatSession(player_stamina=50)
+    process_player_combat_action(session2, "dodge", learner)
+    s.check("dodge recovers stamina (net positive)",
+            session2.player_stamina >= 50,
+            str(session2.player_stamina))
+
+    # Heavy attack: WEAPON_STATS verify heavier cost
+    s.check("heavy attack total cost > normal attack cost (bare hands)",
+            (WEAPON_STATS["bare_hands"]["stamina_cost"] +
+             WEAPON_STATS["bare_hands"]["heavy_cost"]) >
+             WEAPON_STATS["bare_hands"]["stamina_cost"])
+    s.check("heavy attack total cost > normal attack cost (broadsword)",
+            (WEAPON_STATS["broadsword"]["stamina_cost"] +
+             WEAPON_STATS["broadsword"]["heavy_cost"]) >
+             WEAPON_STATS["broadsword"]["stamina_cost"])
+
+    # Stamina exhaustion gate
+    session4 = CombatSession(player_stamina=0)
+    _, outcome4 = process_player_combat_action(session4, "attack", learner)
+    s.check("exhausted player cannot attack",
+            outcome4 == "invalid")
+
+    # ── Coif reduces damage ───────────────────────────────────
+    import random as _r
+    _r.seed(99)
+    dmg_bare  = []
+    dmg_coif  = []
+    for i in range(20):
+        _r.seed(i)
+        s_bare = CombatSession(wearing_coif=False)
+        process_player_combat_action(s_bare, "dodge", learner)
+        dmg_bare.append(100 - s_bare.player_hp)
+        _r.seed(i)
+        s_coif = CombatSession(wearing_coif=True)
+        process_player_combat_action(s_coif, "dodge", learner)
+        dmg_coif.append(100 - s_coif.player_hp)
+    avg_bare = sum(dmg_bare) / len(dmg_bare)
+    avg_coif = sum(dmg_coif) / len(dmg_coif)
+    s.check("chain coif reduces average incoming damage",
+            avg_coif <= avg_bare,
+            f"bare={avg_bare:.1f} coif={avg_coif:.1f}")
+
+    # ── Vault opens when troll bridge opens ───────────────────
+    w3 = build_demo_world()
+    from troll import TrollMemory as _TM
+    _eng.TROLL_MEMORY.reset()
+    _answers = {"r01": "map", "r02": "footsteps", "r03": "echo"}
+    w3.player.location = "bridge"
+    for rid, ans in _answers.items():
+        _eng.TROLL_MEMORY.state().current_rid = rid
+        _eng.TROLL_MEMORY.save()
+        cmd(w3, f"answer {ans}")
+    s.check("vault opens when troll solved",
+            "south" in w3.rooms["cellar"].exits)
+    s.check("vault door revealed",
+            w3.entities["vault_door"].location == "cellar")
+
+    # ── Q-learner updates ─────────────────────────────────────
+    _rnd.seed(7)
+    learner2 = _CM().learner("slime_golem")
+    s5 = CombatSession()
+    state_before = dict(learner2._q)
+    process_player_combat_action(s5, "attack", learner2)
+    s.check("Q-table updated after combat round",
+            learner2._q != state_before or s5.round_num > 1)
+
+    # Cleanup
+    _pl.Path("./npc_memory.json").unlink(missing_ok=True)
+    _pl.Path("./combat_memory.json").unlink(missing_ok=True)
+    _pl.Path("./troll_memory.json").unlink(missing_ok=True)
+    _eng._COMBAT_SESSION = None
+
+    return s
+
+
+# ============================================================
 # Registry
 # ============================================================
 
@@ -1943,6 +2126,7 @@ SECTIONS: dict[str, tuple[Callable, Set[str]]] = {
     "parser_fixes":  (test_parser_fixes,               {"symbolic"}),
     "world_expansion":(test_world_expansion,            {"symbolic"}),
     "troll":          (test_troll,                      {"symbolic"}),
+    "combat":         (test_combat,                     {"symbolic"}),
 }
 
 

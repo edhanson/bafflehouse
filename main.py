@@ -125,14 +125,12 @@ _SPLASH = r"""
 ║    ██████╔╝██║  ██║██║     ██║     ███████╗███████╗    ║
 ║    ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝     ╚══════╝╚══════╝    ║
 ║                                                        ║
-║    ██╗  ██╗ ██████╗ ██╗   ██╗███████╗███████╗          ║
-║    ██║  ██║██╔═══██╗██║   ██║██╔════╝██╔════╝          ║
-║    ███████║██║   ██║██║   ██║███████╗█████╗            ║
-║    ██╔══██║██║   ██║██║   ██║╚════██║██╔══╝            ║
-║    ██║  ██║╚██████╔╝╚██████╔╝███████║███████╗          ║
-║    ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝          ║
-║                                                        ║
-║                 An Interactive Fiction                 ║
+║       ██╗  ██╗ ██████╗ ██╗   ██╗███████╗███████╗       ║
+║       ██║  ██║██╔═══██╗██║   ██║██╔════╝██╔════╝       ║
+║       ███████║██║   ██║██║   ██║███████╗█████╗         ║
+║       ██╔══██║██║   ██║██║   ██║╚════██║██╔══╝         ║
+║       ██║  ██║╚██████╔╝╚██████╔╝███████║███████╗       ║
+║       ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝       ║
 ║                                                        ║
 ╚════════════════════════════════════════════════════════╝
 """
@@ -250,7 +248,44 @@ def main() -> None:
     print_and_log(initial_look, log)
 
     # ── Game loop ─────────────────────────────────────────────────────────
+    player_dead = False
+
     while True:
+        # ── Dead state ───────────────────────────────────────────────────
+        if player_dead or world.player.hp <= 0:
+            try:
+                line = input(f"\n[{world.clock.now}] > ")
+            except (EOFError, KeyboardInterrupt):
+                break
+            normalised = normalize(line)
+            if normalised in {"", "restart"}:
+                # Full restart — rebuild world and reset engine state
+                import engine as _eng
+                import pathlib as _pl
+                _eng._COMBAT_SESSION = None
+                _eng._NPC_INSTANCES.clear()
+                _eng.NPC_MEMORY._store.clear()
+                from npc import JASPER_EVENTS as _JEV
+                _eng.NPC_MEMORY.register_events("jasper", _JEV)
+                _eng.TROLL_MEMORY.reset()
+                world = build_demo_world()
+                pending_clarify = None
+                player_dead = False
+                random.seed(seed)
+                print()
+                msg = "Restarting session...\n"
+                print_and_log(msg, log)
+                print_and_log(do_look(world), log)
+                continue
+            elif normalised in {"quit", "exit"}:
+                farewell = "Farewell."
+                print(farewell)
+                log.log_output(farewell)
+                break
+            else:
+                print("You are dead. Press Enter to quit or type RESTART.")
+            continue
+
         prompt = f"\n[{world.clock.now}] > "
 
         try:
@@ -286,6 +321,10 @@ def main() -> None:
             pending_clarify = pending_clarify,
         )
         print_and_log(output, log)
+
+        # Check for player death after engine output
+        if world.player.hp <= 0:
+            player_dead = True
 
     log.close()
 

@@ -5,8 +5,8 @@
 # Architecture
 # ────────────
 # TrollRiddle      — a single riddle: text, canonical answer, accepted forms
-# TrollState       — persistent state: which riddles seen/solved, weight table
-# TrollMemory      — JSON persistence to troll_memory.json
+# TrollState       — session state: which riddles seen/solved, weight table
+# TrollMemory      — in-memory store for TrollState (session-only, no persistence)
 # troll_tick       — called by the engine each turn when player is at bridge
 # handle_answer    — called when player types an answer
 #
@@ -26,11 +26,9 @@
 
 from __future__ import annotations
 
-import json
 import random
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
@@ -193,45 +191,21 @@ class TrollState:
         # Increase weight slightly — troll enjoys repeating your failures
         self.weights[rid] = self.weights.get(rid, 1.0) + 0.4
 
-    def to_dict(self) -> dict:
-        return {
-            "correct_count": self.correct_count,
-            "solved":         self.solved,
-            "seen":           self.seen,
-            "weights":        self.weights,
-            "bridge_open":    self.bridge_open,
-            "current_rid":    self.current_rid,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "TrollState":
-        state = cls(
-            correct_count = data.get("correct_count", 0),
-            solved        = data.get("solved",         []),
-            seen          = data.get("seen",            []),
-            weights       = data.get("weights",         {}),
-            bridge_open   = data.get("bridge_open",     False),
-            current_rid   = data.get("current_rid",     None),
-        )
-        return state
 
 
 class TrollMemory:
-    """Persists TrollState to disk."""
+    """
+    In-memory store for TrollState.
+
+    The troll's puzzle progress is intentionally session-only — it resets
+    each time the game is launched.  Unlike the golem (which learns across
+    sessions) the troll is a puzzle gate, not a learning adversary.
+    """
 
     def __init__(self, save_path: str = "./troll_memory.json") -> None:
-        self.save_path = Path(save_path)
+        # save_path kept as a parameter so existing call sites don't break,
+        # but it is never read from or written to.
         self._state: Optional[TrollState] = None
-        self._load()
-
-    def _load(self) -> None:
-        if not self.save_path.exists():
-            return
-        try:
-            data = json.loads(self.save_path.read_text())
-            self._state = TrollState.from_dict(data)
-        except Exception:
-            self._state = None
 
     def state(self) -> TrollState:
         if self._state is None:
@@ -239,15 +213,11 @@ class TrollMemory:
         return self._state
 
     def save(self) -> None:
-        self.save_path.write_text(
-            json.dumps(self.state().to_dict(), indent=2)
-        )
+        pass   # intentionally no-op — troll state is session-only
 
     def reset(self) -> None:
-        """Wipe state — for testing."""
+        """Reset state — used by tests."""
         self._state = TrollState()
-        if self.save_path.exists():
-            self.save_path.unlink()
 
 
 # ── Message pools ─────────────────────────────────────────────────────────

@@ -26,6 +26,11 @@ from troll import (
     TrollMemory, troll_encounter, handle_troll_answer,
     TROLL_EXAMINE, TROLL_BLOCKS,
 )
+from npc_qlearning import CombatMemory
+from combat import (
+    CombatSession, start_combat, process_player_combat_action,
+    combat_status, WEAPON_STATS,
+)
 from npc_bayesian import NPCMemory
 from parser import (
     DIRECTIONS,
@@ -44,7 +49,9 @@ from parser import (
 
 # Persistent memory store — loaded from npc_memory.json on first access.
 NPC_MEMORY = NPCMemory("./npc_memory.json")
-TROLL_MEMORY = TrollMemory()
+TROLL_MEMORY    = TrollMemory()
+COMBAT_MEMORY   = CombatMemory()
+_COMBAT_SESSION: Optional[CombatSession] = None
 
 # Register Jasper's custom event table before any reputation is loaded.
 from npc import JASPER_EVENTS
@@ -1456,7 +1463,18 @@ def handle_wear(world: World, ir: dict) -> Tuple[str, bool]:
     if ent.props.get("worn", False):
         return "You're already wearing it.", False
 
+    # Shield cannot be worn while a two-handed weapon is wielded
+    if obj == "kite_shield" and world.player.wielded_weapon:
+        wielded = world.entities.get(world.player.wielded_weapon)
+        if wielded and wielded.props.get("two_handed", False):
+            return (
+                "You can't use a shield while wielding a two-handed weapon. "
+                "Sheathe the weapon first."
+            ), False
+
     ent.props["worn"] = True
+    if obj not in world.player.worn_armour:
+        world.player.worn_armour.append(obj)
     world.note_ref([obj])
     return narrate([
         f"You slip on {ent.name}.",
@@ -1482,7 +1500,9 @@ def handle_remove(world: World, ir: dict) -> Tuple[str, bool]:
 
     # If the target is mounted on the wall (not a worn item), redirect
     # to unmount — "remove X" is natural for wall-mounted items.
-    if "mounted" in ent.tags:
+    # BUT: if the item is currently worn, treat it as a worn item removal
+    # regardless of the mounted tag (items can be unmounted then worn).
+    if "mounted" in ent.tags and not ent.props.get("worn", False):
         return handle_unmount(world, ir)
 
     if obj not in world.player.inventory:
@@ -1494,6 +1514,8 @@ def handle_remove(world: World, ir: dict) -> Tuple[str, bool]:
         return "You aren't wearing it.", False
 
     ent.props["worn"] = False
+    if obj in world.player.worn_armour:
+        world.player.worn_armour.remove(obj)
     world.note_ref([obj])
     return narrate([
         f"You take off {ent.name}.",
@@ -1598,12 +1620,14 @@ def handle_unmount(world: World, ir: dict) -> Tuple[str, bool]:
 
 def handle_wield(world: World, ir: dict) -> Tuple[str, bool]:
     """
-    Wield a weapon — placeholder until the combat system is implemented.
+    Wield a weapon from inventory.
 
-    The player has named a weapon but not a target.  Rather than routing
-    to handle_use (which produces nonsense) or silently failing, we ask
-    for the missing information.  When combat is added this handler will
-    either delegate to attack or set a "readied weapon" state.
+    Enforces the two-handed / shield mutual exclusion:
+    - Two-handed weapons (broadsword, iron_mace) cannot be wielded while
+      the kite_shield is worn.
+    - Attempting to wield a two-handed weapon while the shield is worn
+      produces a refusal asking the player to remove the shield first.
+    Sets world.player.wielded_weapon on success.
     """
     obj = ir.get("obj")
 
@@ -1615,13 +1639,31 @@ def handle_wield(world: World, ir: dict) -> Tuple[str, bool]:
         return "You'll need to be holding it first.", False
 
     ent = world.entity(obj)
-
     if "weapon" not in ent.tags:
         return f"{ent.name.capitalize()} isn't a weapon.", False
 
-    return (
-        f"You raise {ent.name} — but there's nothing here to use it against."
-    ), False
+    # Enforce two-handed / shield mutual exclusion
+    if ent.props.get("two_handed", False):
+        shield = world.entities.get("kite_shield")
+        if shield and shield.props.get("worn", False):
+            return (
+                "You can't wield a two-handed weapon while carrying the shield. "
+                "Remove the shield first."
+            ), False
+
+    # Un-wield any previously wielded weapon
+    if world.player.wielded_weapon and world.player.wielded_weapon in world.entities:
+        prev = world.entities[world.player.wielded_weapon]
+        prev.props["wielded"] = False
+
+    ent.props["wielded"] = True
+    world.player.wielded_weapon = obj
+    world.note_ref([obj])
+    return narrate([
+        f"You ready {ent.name}.",
+        f"You raise {ent.name}.",
+        f"You grip {ent.name} firmly.",
+    ]), True
 
 
 def handle_pet(world: World, ir: dict) -> tuple:
@@ -1763,6 +1805,32 @@ def handle_attack(world: World, ir: dict) -> Tuple[str, bool]:
 
     ent = world.entity(obj)
 
+    if obj == "slime_golem" or "hostile" in ent.tags:
+        # Enter combat with the golem
+        global _COMBAT_SESSION
+        if _COMBAT_SESSION is not None:
+            # Already in combat — route to combat action
+            return _execute_combat_action(world, "attack"), True
+        golem = world.entities.get("slime_golem")
+        if not golem or not golem.props.get("alive", True):
+            return "The golem is already dead.", False
+        _COMBAT_SESSION = CombatSession(
+            player_hp     = world.player.hp,
+            player_max_hp = world.player.max_hp,
+            player_stamina= world.player.stamina,
+            golem_hp      = golem.props.get("hp", 120),
+            golem_max_hp  = golem.props.get("max_hp", 120),
+        )
+        weapon_id     = _get_player_weapon_id(world)
+        wearing_coif  = "chain_coif" in world.player.worn_armour
+        wearing_shield= "kite_shield" in world.player.worn_armour
+        jasper_present= _get_jasper_present(world)
+        opening = start_combat(
+            _COMBAT_SESSION, weapon_id, wearing_coif,
+            wearing_shield, jasper_present
+        )
+        world.player.hp = _COMBAT_SESSION.player_hp
+        return opening, True
     if "npc" in ent.tags:
         # Hostile act against an NPC — large trust penalty
         NPC_MEMORY.record(obj, "player_struck")
@@ -1777,7 +1845,7 @@ def handle_attack(world: World, ir: dict) -> Tuple[str, bool]:
             )
             if dest:
                 _move_npc(npc, dest, world)
-                npc.just_fled = True  # prevent tick from wandering back same turn
+                npc.just_fled = True
         responses = [
             f"You kick {ent.name}. It bolts from the room instantly.",
             f"You strike {ent.name}. It is gone in an instant.",
@@ -1798,6 +1866,179 @@ def handle_attack(world: World, ir: dict) -> Tuple[str, bool]:
 # ============================================================
 # Handler dispatch table
 # ============================================================
+
+def handle_block(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Block — only meaningful during combat.  Outside combat it produces
+    a gentle redirect.  During combat, routing is handled by
+    process_player_combat_action before this handler is reached.
+    """
+    global _COMBAT_SESSION
+    if _COMBAT_SESSION is not None:
+        return _execute_combat_action(world, "block"), True
+    return "There is nothing to block.", False
+
+
+def _get_player_weapon_id(world: World) -> str:
+    """Return the entity id of the wielded weapon, or 'bare_hands'."""
+    wid = world.player.wielded_weapon
+    if wid and wid in world.entities:
+        return wid
+    return "bare_hands"
+
+
+def _get_jasper_present(world: World) -> bool:
+    """Return True if a devoted Jasper is in the same room as the player."""
+    if "jasper" not in world.entities:
+        return False
+    jasper_ent = world.entities["jasper"]
+    if jasper_ent.location != world.player.location:
+        return False
+    disp = NPC_MEMORY.disposition("jasper")
+    return disp == "devoted"
+
+
+def _execute_combat_action(world: World, action: str) -> str:
+    """
+    Process one player combat action and return the narrative.
+    Handles session lifecycle: death, victory, and flight.
+    """
+    global _COMBAT_SESSION
+    if _COMBAT_SESSION is None:
+        return "You are not in combat."
+
+    learner = COMBAT_MEMORY.learner("slime_golem")
+
+    # Refresh Jasper's combat presence each round — he may arrive mid-fight
+    if _COMBAT_SESSION is not None:
+        _COMBAT_SESSION.update_jasper(_get_jasper_present(world))
+
+    narrative, outcome = process_player_combat_action(
+        session      = _COMBAT_SESSION,
+        player_input = action,
+        learner      = learner,
+    )
+    COMBAT_MEMORY.save()
+
+    # Sync player vitals from session before potentially clearing it
+    world.player.hp      = _COMBAT_SESSION.player_hp
+    world.player.stamina = _COMBAT_SESSION.player_stamina
+
+    # Always write current golem HP back to entity so it persists
+    golem = world.entities.get("slime_golem")
+    if golem:
+        golem.props["hp"] = _COMBAT_SESSION.golem_hp
+
+    if outcome == "player_dead":
+        _COMBAT_SESSION = None
+
+    elif outcome == "golem_dead":
+        _COMBAT_SESSION = None
+        if golem:
+            golem.props["alive"] = False
+            golem.props["hp"]    = 0
+            _move_entity_to(world, "slime_golem", "hidden")
+            remains  = world.entities.get("golem_remains")
+            treasure = world.entities.get("secret_treasure")
+            if remains:
+                remains.location = world.player.location
+                room = world.rooms.get(world.player.location)
+                if room and "golem_remains" not in room.entities:
+                    room.entities.append("golem_remains")
+            if treasure:
+                treasure.location = world.player.location
+                room = world.rooms.get(world.player.location)
+                if room and "secret_treasure" not in room.entities:
+                    room.entities.append("secret_treasure")
+
+    elif outcome == "fled":
+        _COMBAT_SESSION = None
+        # Partial HP regeneration for the golem between encounters —
+        # it recovers 10% of max HP, rounded up, but never above max.
+        if golem and golem.props.get("alive", True):
+            regen = max(1, int(golem.props.get("max_hp", 120) * 0.10))
+            golem.props["hp"] = min(
+                golem.props.get("max_hp", 120),
+                golem.props.get("hp", 120) + regen
+            )
+        # Move player to an adjacent room
+        current = world.player.location
+        room = world.rooms.get(current)
+        if room:
+            for dest in room.exits.values():
+                if dest != current:
+                    world.player.location = dest
+                    break
+
+    return narrative
+
+
+# Rooms the golem cannot enter (too big / wrong terrain)
+_GOLEM_FORBIDDEN = {"upstairs_landing", "bedroom_east", "bedroom_west",
+                    "forest_edge", "forest_a", "forest_b",
+                    "forest_c", "forest_d"}
+
+
+def _golem_tick(world: World, golem, player_moved: bool) -> None:
+    """
+    Advance the golem one tick:
+    - If aware and not in combat, pursue the player.
+    - If not aware, check adjacent rooms for the player (smell).
+    - Otherwise wander randomly with 30% probability.
+    Forbidden rooms are never entered.
+    """
+    import random as _random
+    player_room = world.player.location
+    golem_room  = golem.location
+
+    def _allowed_exits(room_id: str):
+        room = world.rooms.get(room_id)
+        if not room:
+            return []
+        return [dest for dest in room.exits.values()
+                if dest not in _GOLEM_FORBIDDEN and dest in world.rooms]
+
+    # Smell detection: player in adjacent room
+    adjacent = _allowed_exits(golem_room)
+    if player_room in adjacent and not golem.props.get("aware"):
+        golem.props["aware"] = True
+
+    # If aware, pursue
+    if golem.props.get("aware") and golem_room != player_room:
+        # Move toward player: pick exit closest to player (BFS one step)
+        if player_room in adjacent:
+            _move_entity_to(world, "slime_golem", player_room)
+        else:
+            # Pick a random allowed exit as a rough pursuit
+            if adjacent:
+                dest = _random.choice(adjacent)
+                _move_entity_to(world, "slime_golem", dest)
+        return
+
+    # Not aware — 30% random wander
+    if golem_room == player_room:
+        # Already with player — awareness triggered
+        golem.props["aware"] = True
+        return
+    if _random.random() < 0.30 and adjacent:
+        dest = _random.choice(adjacent)
+        _move_entity_to(world, "slime_golem", dest)
+
+
+def _move_entity_to(world: World, eid: str, dest: str) -> None:
+    """Move an entity to a new location, updating room entity lists."""
+    ent = world.entities.get(eid)
+    if not ent:
+        return
+    old = ent.location
+    if old and old in world.rooms:
+        if eid in world.rooms[old].entities:
+            world.rooms[old].entities.remove(eid)
+    ent.location = dest
+    if dest in world.rooms:
+        if eid not in world.rooms[dest].entities:
+            world.rooms[dest].entities.append(eid)
+
 
 def handle_answer(world: World, ir: dict) -> Tuple[str, bool]:
     """
@@ -1820,6 +2061,14 @@ def handle_answer(world: World, ir: dict) -> Tuple[str, bool]:
     # Open bridge east exit the moment the last riddle is answered correctly.
     if state.bridge_open and "east" not in world.rooms["bridge"].exits:
         world.rooms["bridge"].exits["east"] = "bridge_far_bank"
+        # Also open the vault in the cellar and reveal the vault door
+        if "south" not in world.rooms["cellar"].exits:
+            world.rooms["cellar"].exits["south"] = "vault"
+        vault_door = world.entities.get("vault_door")
+        if vault_door:
+            vault_door.location = "cellar"
+            if "vault_door" not in world.rooms["cellar"].entities:
+                world.rooms["cellar"].entities.append("vault_door")
 
     TROLL_MEMORY.save()
     return response, True
@@ -1858,6 +2107,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "offer":      handle_offer,
     "call":       handle_call,
     "answer":     handle_answer,
+    "block":      handle_block,
 }
 
 
@@ -1937,6 +2187,7 @@ def process_input(
 
     Returns (output_text, new_pending_clarification_or_None).
     """
+    global _COMBAT_SESSION
     # ---- Resolve a pending clarification ----
     if pending_clarify is not None:
         grounded = resolve_clarification(world, pending_clarify, text)
@@ -1963,6 +2214,16 @@ def process_input(
         if consumed:
             world.clock.advance(1)
         return out, None
+
+    # ---- Combat intercept: if in combat, all input routes to combat ----
+    if _COMBAT_SESSION is not None:
+        normalised_input = normalize(text)
+        if normalised_input in {"look", "l", "inventory", "inv", "i"}:
+            pass   # allow look/inv during combat
+        else:
+            narrative = _execute_combat_action(world, normalised_input)
+            world.clock.advance(1)
+            return narrative, None
 
     # ---- Split "open door then go north" style compound commands ----
     segments = split_compound(text)
@@ -2030,6 +2291,36 @@ def process_input(
             if world.player.location != location_before:
                 player_moved    = True
                 location_before = world.player.location
+
+    # ---- Golem tick: wander, detect, pursue ----
+    if any_consumed:
+        golem = world.entities.get("slime_golem")
+        vault_open = "south" in world.rooms.get("cellar", type("R", (), {"exits": {}})()).exits
+        if golem and golem.props.get("alive", True) and golem.location != "hidden" and vault_open:
+            _golem_tick(world, golem, player_moved)
+            # Check if golem just entered player's room (combat trigger)
+            if (golem.location == world.player.location
+                    and _COMBAT_SESSION is None
+                    and golem.props.get("aware", False)):
+                session = CombatSession(
+                    player_hp      = world.player.hp,
+                    player_max_hp  = world.player.max_hp,
+                    player_stamina = world.player.stamina,
+                    golem_hp       = golem.props.get("hp", 120),
+                    golem_max_hp   = golem.props.get("max_hp", 120),
+                )
+                _COMBAT_SESSION = session
+                opening = start_combat(
+                    session,
+                    _get_player_weapon_id(world),
+                    "chain_coif" in world.player.worn_armour,
+                    "kite_shield" in world.player.worn_armour,
+                    _get_jasper_present(world),
+                )
+                outputs.append(
+                    "The slime golem surges into the room. "
+                    "It has found you.\n\n" + opening
+                )
 
     # ---- NPC tick: runs once per turn after all segments execute ----
     # Only ticks when at least one action was consumed (so meta commands

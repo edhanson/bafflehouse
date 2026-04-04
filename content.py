@@ -390,6 +390,22 @@ def build_demo_world() -> World:
             ),
             exits={"east": "foyer"}
             # NOTE: "north" to cellar_passage added dynamically by lever puzzle.
+            # NOTE: "south" to vault added dynamically when troll puzzle is solved;
+            #        see handle_answer in engine.py.
+        ),
+        # The vault — locked behind the troll puzzle.
+        # Accessible only after the bridge opens (troll defeated).
+        # The slime golem spawns here and may roam from this room.
+        "vault": Room(
+            rid="vault",
+            title="The Vault",
+            desc=(
+                "A low chamber cut from raw stone, clearly not part of the original "
+                "cellar construction. The walls are smooth and faintly warm to the "
+                "touch. A smell like hot iron and something organic hangs in the air. "
+                "Whatever was kept here, it was not wine."
+            ),
+            exits={"north": "cellar"}
         ),
     }
 
@@ -800,7 +816,7 @@ def build_demo_world() -> World:
             eid="broadsword",
             name="a broadsword",
             aliases=["sword", "broadsword", "blade", "long sword", "longsword"],
-            tags={"mounted", "weapon"},
+            tags={"mounted", "weapon", "portable"},
             props={
                 "desc": (
                     "A broad-bladed sword, the steel dulled with age but the edge "
@@ -808,7 +824,7 @@ def build_demo_world() -> World:
                 ),
                 "damage": 4,
                 "damage_type": "slash",
-                "two_handed": False,
+                "two_handed": True,
                 "weight": "heavy",
             },
             location="trophy_room"
@@ -817,7 +833,7 @@ def build_demo_world() -> World:
             eid="hunting_knife",
             name="a hunting knife",
             aliases=["knife", "hunting knife", "dagger", "short blade"],
-            tags={"mounted", "weapon"},
+            tags={"mounted", "weapon", "portable"},
             props={
                 "desc": (
                     "A long hunting knife with a bone handle, well-balanced and "
@@ -835,7 +851,7 @@ def build_demo_world() -> World:
             eid="iron_mace",
             name="an iron mace",
             aliases=["mace", "iron mace", "club", "bludgeon"],
-            tags={"mounted", "weapon"},
+            tags={"mounted", "weapon", "portable"},
             props={
                 "desc": (
                     "A flanged iron mace, heavy and unsubtle. The haft is wrapped "
@@ -843,7 +859,7 @@ def build_demo_world() -> World:
                 ),
                 "damage": 5,
                 "damage_type": "blunt",
-                "two_handed": False,
+                "two_handed": True,
                 "weight": "heavy",
             },
             location="trophy_room"
@@ -852,7 +868,7 @@ def build_demo_world() -> World:
             eid="kite_shield",
             name="a kite shield",
             aliases=["shield", "kite shield", "buckler"],
-            tags={"mounted", "armor", "wearable"},
+            tags={"mounted", "armor", "wearable", "portable"},
             props={
                 "desc": (
                     "A kite-shaped shield of banded iron over oak. The painted device "
@@ -870,7 +886,7 @@ def build_demo_world() -> World:
             eid="chain_coif",
             name="a chain coif",
             aliases=["coif", "chain coif", "mail coif", "chainmail hood", "hood"],
-            tags={"mounted", "armor", "wearable"},
+            tags={"mounted", "armor", "wearable", "portable"},
             props={
                 "desc": (
                     "A hood of riveted chainmail protecting head and neck. Heavy, "
@@ -1325,6 +1341,80 @@ def build_demo_world() -> World:
                 "it in the kitchen for a reason."
             )},
             location="kitchen"
+        ),
+
+        # ======================================================
+        # VAULT AND GOLEM ENTITIES
+        # ======================================================
+
+        "vault_door": Entity(
+            eid="vault_door",
+            name="the vault door",
+            aliases=["vault door", "stone door", "hidden door",
+                     "door in the wall", "door", "vault"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "A section of the cellar wall that does not quite match the rest. "
+                    "The stone is slightly smoother, the mortar slightly newer. "
+                    "A passage lies beyond — opened now, though by what mechanism "
+                    "is unclear."
+                ),
+            },
+            location="hidden"   # revealed when troll puzzle solved
+        ),
+        "slime_golem": Entity(
+            eid="slime_golem",
+            name="the slime golem",
+            aliases=["golem", "slime golem", "creature", "hellspawn",
+                     "abomination", "thing", "monster"],
+            tags={"hostile", "living"},   # not "npc" — managed by combat.py
+            props={
+                "desc": (
+                    "An amorphous mass in a vaguely humanoid shape, dark and "
+                    "iridescent, like oil on water. It has no face, but there is "
+                    "something in the way it orients toward you that is unmistakably "
+                    "attentive. It smells of sulphur and hot metal. It is larger "
+                    "than a person."
+                ),
+                "hp":         120,
+                "max_hp":     120,
+                "alive":      True,
+                "aware":      False,    # True once it detects the player
+                "home_room":  "vault",
+            },
+            location="vault"
+        ),
+        "golem_remains": Entity(
+            eid="golem_remains",
+            name="a pool of iridescent goo",
+            aliases=["goo", "remains", "pool", "slime", "puddle",
+                     "iridescent pool", "golem remains"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "A spreading pool of dark, iridescent fluid — all that remains "
+                    "of the slime golem. The smell of sulphur lingers. Something "
+                    "glitters at the centre of the pool."
+                ),
+            },
+            location="hidden"
+        ),
+        "secret_treasure": Entity(
+            eid="secret_treasure",
+            name="a strange metallic object",
+            aliases=["treasure", "object", "metallic object", "strange object",
+                     "glittering object", "artefact", "artifact"],
+            tags={"portable"},
+            props={
+                "desc": (
+                    "A small object of unfamiliar manufacture — metal, but not any "
+                    "metal with an obvious name. Its surface is covered in markings "
+                    "that might be writing, or might be circuit traces. It is "
+                    "slightly warm."
+                ),
+            },
+            location="hidden"
         ),
 
         # ======================================================

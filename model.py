@@ -32,8 +32,14 @@ class Room:
 
 @dataclass
 class Player:
-    location: str
-    inventory: List[str] = field(default_factory=list)
+    location:       str
+    inventory:      List[str]          = field(default_factory=list)
+    hp:             int                = 100
+    max_hp:         int                = 100
+    stamina:        int                = 100
+    max_stamina:    int                = 100
+    wielded_weapon: Optional[str]      = None   # entity id or None
+    worn_armour:    List[str]          = field(default_factory=list)
 
 
 @dataclass
