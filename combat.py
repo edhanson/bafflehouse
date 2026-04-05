@@ -527,15 +527,30 @@ def resolve_exchange(
 
     elif player_action == "dodge":
         session.recover_stamina(8 - armour_penalty)
-        # Dodge succeeds against strike/heavy_strike, fails against feint
+        # Dodge succeeds against strike/heavy_strike/pursue, fails against feint.
+        # Each golem action gets explicit narrative so there's always a message.
         if golem_action in ("strike", "heavy_strike", "pursue", "_miss"):
             lines.append(_pick(_DODGE_SUCCESS))
-            reward += abs(REWARDS["player_dodged"])  # positive: dodge worked
-            golem_action = "_dodged"  # sentinel: golem attack negated
+            reward += abs(REWARDS["player_dodged"])
+            golem_action = "_dodged"
         elif golem_action == "feint":
             lines.append(_pick(_DODGE_FAIL_FEINT))
             reward += REWARDS["player_dodged"]
-            # Feint damage applied below
+        elif golem_action == "defensive":
+            # Golem is bracing — nothing to dodge, stamina still recovers
+            lines.append(
+                "The golem pulls inward, bracing. Your dodge was unnecessary "
+                "but costs nothing."
+            )
+        elif golem_action == "special":
+            # Dodging reduces acid splash damage by half — you get clear but
+            # not completely
+            lines.append(
+                "You throw yourself aside — the acid spray catches you at "
+                "the edge of its arc."
+            )
+            # Acid damage applied below at half value; mark with sentinel
+            golem_action = "_acid_partial"
 
     elif player_action == "block":
         if not session.wearing_shield:
@@ -630,8 +645,11 @@ def resolve_exchange(
         reward += REWARDS["hit_received"]
 
     elif golem_action == "defensive":
-        # Already handled in player attack block above
-        if player_action not in ("attack", "heavy_attack"):
+        # The golem braces — only narratively relevant when the player
+        # actually attacks into it.  For dodge, block, taunt, flee, etc.
+        # the brace is silent: the player isn't swinging, so there's
+        # nothing to transmit.
+        if player_action in ("attack", "heavy_attack"):
             lines.append(_pick(_GOLEM_DEFENSIVE))
 
     elif golem_action == "feint":
@@ -643,21 +661,24 @@ def resolve_exchange(
         player_dmg += final_dmg
         reward += REWARDS["hit_received"]
 
-    elif golem_action == "special":
-        # Acid: ignores all armour reduction.
-        # The golem takes 5 HP self-damage — spraying acid from its own
-        # mass costs it structural integrity.
-        session.acid_cooldown  = session.ACID_COOLDOWN_MIN
-        session.acid_total    += 1
-        golem_dmg             += 5   # self-damage
+    elif golem_action in ("special", "_acid_partial"):
+        # Acid: self-damage applies regardless of whether player dodged.
+        # Cooldown and total are only counted once (on the original "special").
+        if golem_action == "special":
+            session.acid_cooldown  = session.ACID_COOLDOWN_MIN
+            session.acid_total    += 1
+            golem_dmg             += 5   # self-damage
         raw_dmg = _roll(GOLEM_DAMAGE["special"])
-        # Shield gives partial protection
-        if player_action == "block" and session.wearing_shield:
+        # Damage reduction by situation
+        if golem_action == "_acid_partial":
+            # Player dodged — caught at the edge of the arc
+            final_dmg = max(1, raw_dmg // 2)
+        elif player_action == "block" and session.wearing_shield:
             final_dmg = int(raw_dmg * 0.5)
             lines.append(_pick(_BLOCK_ACID))
         else:
             final_dmg = raw_dmg
-        lines.append(_pick(_GOLEM_SPECIAL))
+            lines.append(_pick(_GOLEM_SPECIAL))
         lines.append(f"You take {final_dmg} damage from the acid.")
         player_dmg += final_dmg
         reward += REWARDS["hit_received"] * 1.2
@@ -813,6 +834,7 @@ def process_player_combat_action(
         session.heavy_strike_warning = False
 
     # Resolve the exchange
+    original_golem_action = golem_action   # preserve for Q-update (sentinels may modify it)
     narrative, player_delta, golem_delta, reward = resolve_exchange(
         session, player_action, golem_action, learner
     )
@@ -835,12 +857,12 @@ def process_player_combat_action(
     else:
         next_state = session.to_combat_state()
 
-    learner.update(state, golem_action, reward, next_state)
+    learner.update(state, original_golem_action, reward, next_state)
 
     # Determine outcome.
     # Flee success is signalled by reward == inf (sentinel from resolve_exchange).
     if reward == float("inf"):
-        learner.update(state, golem_action, REWARDS["player_fled"], None)
+        learner.update(state, original_golem_action, REWARDS["player_fled"], None)
         learner.end_session()
         return narrative + "\n\n" + _fled_prompt(), "fled"
 

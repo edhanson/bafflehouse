@@ -211,6 +211,12 @@ class QLearner:
         next_state: Optional[CombatState],
     ) -> None:
         """Q(s,a) ← Q(s,a) + α × [r + γ × max_a' Q(s',a') − Q(s,a)]"""
+        import math
+        # Guard: never allow inf or NaN into the table — clamp reward to
+        # a large finite value so a sentinel leaking through can't corrupt.
+        if not math.isfinite(reward):
+            reward = max(-100.0, min(100.0, 0.0 if math.isnan(reward) else
+                         (100.0 if reward > 0 else -100.0)))
         key     = state.to_key()
         act_idx = NPC_ACTIONS.index(action)
         current = self._q_row(key)[act_idx]
