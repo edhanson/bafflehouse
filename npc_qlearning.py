@@ -102,20 +102,35 @@ class QLearner:
     """
     Tabular Q-learner for one NPC.
 
+    Action selection uses a minimum-floor blended probability rather than
+    pure epsilon-greedy.  Every action is guaranteed at least min_action_prob
+    probability regardless of Q-table state, preventing the all-zeros
+    initialisation from collapsing exploitation to always-pick-first-action.
+
+    The remaining probability mass (1 - n_actions * min_action_prob) is
+    distributed proportional to softmax-normalised Q-values so the learner
+    can still develop strong preferences over sessions.
+
     Parameters
     ----------
-    alpha          : learning rate — how quickly new experience updates beliefs
-    gamma          : discount factor — how much future rewards are valued
-    epsilon        : exploration rate — probability of a random action
-    epsilon_decay  : shrinks epsilon each session (not each round)
-    epsilon_min    : floor for epsilon — always some unpredictability
+    alpha            : learning rate
+    gamma            : discount factor
+    epsilon          : retained for serialisation compatibility; no longer
+                       used in action selection (floor replaces it)
+    epsilon_decay    : retained for compatibility
+    epsilon_min      : retained for compatibility
+    min_action_prob  : minimum probability for each action (default 0.05)
+    softmax_temp     : temperature for Q-value softmax (default 1.0)
+                       higher = more uniform; lower = more greedy
     """
-    npc_id:        str
-    alpha:         float = 0.15
-    gamma:         float = 0.85
-    epsilon:       float = 0.30
-    epsilon_decay: float = 0.95
-    epsilon_min:   float = 0.10
+    npc_id:           str
+    alpha:            float = 0.15
+    gamma:            float = 0.85
+    epsilon:          float = 0.30      # kept for serialisation compatibility
+    epsilon_decay:    float = 0.95      # kept for serialisation compatibility
+    epsilon_min:      float = 0.10      # kept for serialisation compatibility
+    min_action_prob:  float = 0.05      # floor probability per action
+    softmax_temp:     float = 1.0       # Q-value softmax temperature
 
     _q: Dict[tuple, List[float]] = field(default_factory=dict)
     _sessions: int = 0
@@ -125,13 +140,68 @@ class QLearner:
             self._q[state_key] = [0.0] * len(NPC_ACTIONS)
         return self._q[state_key]
 
-    def choose_action(self, state: CombatState) -> str:
-        if random.random() < self.epsilon:
-            return random.choice(NPC_ACTIONS)
-        key = state.to_key()
-        q_values = self._q_row(key)
-        best_idx = q_values.index(max(q_values))
-        return NPC_ACTIONS[best_idx]
+    def _softmax(self, values: List[float]) -> List[float]:
+        """
+        Compute softmax probabilities with temperature scaling.
+
+        Subtracts the max before exponentiation for numerical stability —
+        avoids overflow when Q-values are large positives.
+        """
+        import math
+        scaled = [v / self.softmax_temp for v in values]
+        max_v  = max(scaled)
+        exps   = [math.exp(v - max_v) for v in scaled]
+        total  = sum(exps)
+        return [e / total for e in exps]
+
+    def choose_action(
+        self,
+        state: CombatState,
+        forbidden: Optional[List[str]] = None,
+    ) -> str:
+        """
+        Select an action using minimum-floor blended probabilities.
+
+        Every action gets at least min_action_prob probability.  The
+        remaining mass is distributed by softmax-normalised Q-values.
+        Actions in `forbidden` are excluded (their mass redistributed).
+
+        This replaces epsilon-greedy: every action fires occasionally from
+        session one, while the learner develops preferences over time.
+        """
+        forbidden = forbidden or []
+        key       = state.to_key()
+        q_values  = self._q_row(key)
+
+        n      = len(NPC_ACTIONS)
+        floor  = self.min_action_prob
+        q_probs = self._softmax(q_values)
+
+        # Blended probability: floor + Q-weighted remainder
+        remaining = 1.0 - n * floor
+        probs = [floor + remaining * qp for qp, _ in zip(q_probs, NPC_ACTIONS)]
+
+        # Zero out forbidden actions and renormalise
+        for i, action in enumerate(NPC_ACTIONS):
+            if action in forbidden:
+                probs[i] = 0.0
+        total = sum(probs)
+        if total <= 0.0:
+            # All actions forbidden — fall back to first non-forbidden
+            for i, action in enumerate(NPC_ACTIONS):
+                if action not in forbidden:
+                    return action
+            return NPC_ACTIONS[0]
+        probs = [p / total for p in probs]
+
+        # Weighted random choice
+        roll = random.random()
+        cumulative = 0.0
+        for action, prob in zip(NPC_ACTIONS, probs):
+            cumulative += prob
+            if roll < cumulative:
+                return action
+        return NPC_ACTIONS[-1]   # floating-point safety fallback
 
     def update(
         self,
@@ -156,30 +226,36 @@ class QLearner:
 
     def end_session(self) -> None:
         self._sessions += 1
+        # epsilon decay retained for compatibility even though epsilon
+        # is no longer used in action selection
         self.epsilon = max(self.epsilon_min,
                            self.epsilon * self.epsilon_decay)
 
     def to_dict(self) -> dict:
         return {
-            "npc_id":        self.npc_id,
-            "alpha":         self.alpha,
-            "gamma":         self.gamma,
-            "epsilon":       self.epsilon,
-            "epsilon_decay": self.epsilon_decay,
-            "epsilon_min":   self.epsilon_min,
-            "sessions":      self._sessions,
-            "q_table":       {str(k): v for k, v in self._q.items()},
+            "npc_id":          self.npc_id,
+            "alpha":           self.alpha,
+            "gamma":           self.gamma,
+            "epsilon":         self.epsilon,
+            "epsilon_decay":   self.epsilon_decay,
+            "epsilon_min":     self.epsilon_min,
+            "min_action_prob": self.min_action_prob,
+            "softmax_temp":    self.softmax_temp,
+            "sessions":        self._sessions,
+            "q_table":         {str(k): v for k, v in self._q.items()},
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "QLearner":
         obj = cls(
-            npc_id        = data["npc_id"],
-            alpha         = data.get("alpha",         0.15),
-            gamma         = data.get("gamma",         0.85),
-            epsilon       = data.get("epsilon",       0.30),
-            epsilon_decay = data.get("epsilon_decay", 0.95),
-            epsilon_min   = data.get("epsilon_min",   0.10),
+            npc_id          = data["npc_id"],
+            alpha           = data.get("alpha",           0.15),
+            gamma           = data.get("gamma",           0.85),
+            epsilon         = data.get("epsilon",         0.30),
+            epsilon_decay   = data.get("epsilon_decay",   0.95),
+            epsilon_min     = data.get("epsilon_min",     0.10),
+            min_action_prob = data.get("min_action_prob", 0.05),
+            softmax_temp    = data.get("softmax_temp",    1.0),
         )
         obj._sessions = data.get("sessions", 0)
         obj._q = {

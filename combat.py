@@ -125,10 +125,10 @@ JASPER_HIT_PROB            = 0.4   # chance golem targets Jasper instead of play
 # ── Jasper combat contribution ─────────────────────────────────────────────
 # Probabilities must sum to 1.0
 JASPER_COMBAT_OUTCOMES = {
-    "distract": 0.40,   # golem action downgraded
+    "distract": 0.25,   # golem action downgraded (reduced from 0.40)
     "attack":   0.25,   # 1–2 HP direct damage
     "hiss":     0.20,   # 50% chance golem wastes action on Jasper
-    "cower":    0.15,   # no contribution
+    "cower":    0.30,   # no contribution (increased from 0.15)
 }
 
 JASPER_HISS_MESSAGES = [
@@ -190,6 +190,10 @@ class CombatSession:
     golem_defeated:     bool  = False
     jasper_present:     bool  = False    # True when devoted cat is in room
     jasper_rattled:     bool  = False    # True after golem hits Jasper
+    acid_cooldown:      int   = 0        # turns until acid can fire again
+    acid_total:         int   = 0        # total acid attacks this session
+    ACID_COOLDOWN_MIN:  int   = 3        # minimum turns between acid attacks
+    ACID_MAX_SESSION:   int   = 4        # max acid attacks per session
 
     def stamina_low(self) -> bool:
         return self.player_stamina < STAMINA_LOW
@@ -394,6 +398,12 @@ def resolve_jasper(session: CombatSession) -> Tuple[str, str]:
     if not session.jasper_present:
         return "", "absent"
 
+    # Rattled Jasper (just been hit) cowers with 80% probability
+    if session.jasper_rattled:
+        if random.random() < 0.80:
+            return _pick(JASPER_COWER_MESSAGES), "cower"
+        # 20% chance: adrenaline keeps him fighting despite being shaken
+
     roll = random.random()
     cumulative = 0.0
     for outcome, prob in JASPER_COMBAT_OUTCOMES.items():
@@ -427,7 +437,7 @@ def apply_jasper_to_golem_action(
             golem_action = "strike"
             extra = " Jasper's assault draws the golem's attention just enough."
         elif golem_action == "strike":
-            golem_action = "_miss"   # sentinel: golem misses entirely
+            golem_action = "_partial"  # sentinel: golem hits at half damage
             extra = " Jasper's interference costs the golem its aim."
     elif jasper_effect == "hiss":
         # 50% chance golem targets Jasper instead
@@ -570,6 +580,16 @@ def resolve_exchange(
     if golem_action == "_miss":
         lines.append("The golem's attack finds nothing.")
 
+    elif golem_action == "_partial":
+        # Distracted strike — half damage
+        dmg_range = GOLEM_DAMAGE["strike"]
+        raw_dmg   = _roll(dmg_range) // 2
+        final_dmg = max(1, int(raw_dmg * (1.0 - coif_red)))
+        lines.append(_pick(_GOLEM_STRIKES))
+        lines.append(f"You take {final_dmg} damage (glancing blow).")
+        player_dmg += final_dmg
+        reward += REWARDS["hit_received"] * 0.5
+
     elif golem_action == "_dodged":
         pass   # already narrated
 
@@ -624,7 +644,12 @@ def resolve_exchange(
         reward += REWARDS["hit_received"]
 
     elif golem_action == "special":
-        # Acid: ignores all armour reduction
+        # Acid: ignores all armour reduction.
+        # The golem takes 5 HP self-damage — spraying acid from its own
+        # mass costs it structural integrity.
+        session.acid_cooldown  = session.ACID_COOLDOWN_MIN
+        session.acid_total    += 1
+        golem_dmg             += 5   # self-damage
         raw_dmg = _roll(GOLEM_DAMAGE["special"])
         # Shield gives partial protection
         if player_action == "block" and session.wearing_shield:
@@ -763,13 +788,22 @@ def process_player_combat_action(
     if session.stamina_exhausted() and player_action in ("attack", "heavy_attack"):
         return _pick(_EXHAUSTED) + "\n\n" + _combat_prompt(session), "invalid"
 
-    # Choose golem action via Q-learner.
-    # "pursue" is only meaningful when the player is actually fleeing;
-    # if chosen at other times, fall back to "strike".
-    state        = session.to_combat_state()
-    golem_action = learner.choose_action(state)
-    if golem_action == "pursue" and player_action != "flee":
-        golem_action = "strike"
+    # Choose golem action via Q-learner using minimum-floor blended
+    # probabilities — every action has at least 5% chance each round.
+    # Acid cooldown and session cap are enforced via the forbidden list,
+    # so the learner still picks naturally but acid is excluded when
+    # it is on cooldown or has been used too many times this session.
+    # "pursue" is forbidden unless the player is actually fleeing.
+    state = session.to_combat_state()
+    forbidden = []
+    if player_action != "flee":
+        forbidden.append("pursue")
+    if session.acid_cooldown > 0 or session.acid_total >= session.ACID_MAX_SESSION:
+        forbidden.append("special")
+    # Tick down acid cooldown
+    if session.acid_cooldown > 0:
+        session.acid_cooldown -= 1
+    golem_action = learner.choose_action(state, forbidden=forbidden)
 
     # Telegraph heavy strike one round in advance
     if golem_action == "heavy_strike" and not session.heavy_strike_warning:
