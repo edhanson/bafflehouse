@@ -57,17 +57,17 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
     ("enters_room", "devoted"): [
         "The cat is here. It gets up the moment it sees you.",
         "The cat pads toward you immediately, weaving between your feet.",
-        "The cat makes a small sound and comes to meet you at the door.",
+        "The cat makes a small sound and comes to meet you.",
     ],
 
     # Cat has just followed the player into a new room (devoted only).
     # These describe arrival, not a cat already present.
     ("follows", "devoted"): [
         "The cat pads in after you a moment later.",
-        "The cat slips through the door behind you.",
-        "A soft sound of paws on stone — the cat has followed you in.",
-        "The cat rounds the doorway and comes to your side.",
-        "The cat trots in and settles near you.",
+        "The cat follows close behind you.",
+        "A soft sound of paws — the cat has followed you.",
+        "The cat trots up and settles near you.",
+        "The cat appears at your side a moment later.",
     ],
 
     # Cat is already in the same room — ambient presence messages
@@ -78,7 +78,7 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
     ],
     ("ambient", "neutral"): [
         "The cat yawns enormously.",
-        "The cat sits very still, apparently staring at the wall.",
+        "The cat sits very still, apparently staring at nothing.",
         "The cat grooms itself with focused intensity.",
     ],
     ("ambient", "friendly"): [
@@ -88,8 +88,8 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
     ],
     ("ambient", "devoted"): [
         "The cat stays close to your heels.",
-        "The cat watches the corridor ahead of you.",
-        "The cat's ears swivel, tracking sounds further down the hall.",
+        "The cat watches the way ahead of you.",
+        "The cat's ears swivel, alert to something nearby.",
     ],
 
     # Reactions to specific player actions

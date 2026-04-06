@@ -466,7 +466,17 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
         # obj is the raw ungrounded phrase — check if it appears in the
         # current room's visible text before denying existence outright.
         if phrase_in_room_text(world, str(obj)):
-            return "You notice nothing special about it.", True
+            # Use "them" for phrases that look plural (end in s but not
+            # common singular endings like -ss, -us, -is, -ness, -ess).
+            phrase = str(obj).strip().rstrip(".")
+            last_word = phrase.split()[-1] if phrase.split() else phrase
+            _singular_endings = ("ss", "us", "is", "ness", "ess", "ous")
+            is_plural = (
+                last_word.endswith("s")
+                and not any(last_word.endswith(e) for e in _singular_endings)
+            )
+            pronoun = "them" if is_plural else "it"
+            return f"You notice nothing special about {pronoun}.", True
         return "You don't see that here.", False
 
     err = require_visible(world, obj)
@@ -531,9 +541,10 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     # Priority order:
     #   1. Liquid container that has been emptied (empty=True)
     #   2. Solid container that is open and has no contents
-    #   3. Item opened with a tool (e.g. the cat food tin)
-    #   4. Scenery with a state-dependent desc_open (e.g. bricked_wall)
-    #   5. Default desc
+    #   3. Solid container that is closed and has no contents (desc_closed_empty)
+    #   4. Item opened with a tool (e.g. the cat food tin)
+    #   5. Scenery with a state-dependent desc_open (e.g. bricked_wall)
+    #   6. Default desc
     _is_empty_liquid = ent.props.get("empty", False) and "desc_empty" in ent.props
     _is_empty_solid  = (
         "container" in ent.tags
@@ -542,8 +553,16 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
         and not (ent.props.get("liquid") and not ent.props.get("empty", False))
         and "desc_empty" in ent.props
     )
+    _is_closed_empty = (
+        "container" in ent.tags
+        and not ent.props.get("open", False)
+        and not ent.contains
+        and "desc_closed_empty" in ent.props
+    )
     if _is_empty_liquid or _is_empty_solid:
         desc = ent.props["desc_empty"]
+    elif _is_closed_empty:
+        desc = ent.props["desc_closed_empty"]
     elif ent.props.get("opened", False) and "desc_opened" in ent.props:
         desc = ent.props["desc_opened"]
     elif ("desc_open" in ent.props
@@ -952,6 +971,22 @@ def handle_drink(world: World, ir: dict) -> Tuple[str, bool]:
     if "drinkable" in ent.tags:
         # Future: consume the item and apply its effect.
         return f"You drink {ent.name}.", True
+
+    # Liquid-source containers (ewer, flask) — distinguish drinkable water
+    # from harmful liquids like lamp oil.
+    if "liquid_source" in ent.tags:
+        liquid = ent.props.get("liquid", "")
+        if ent.props.get("empty", False):
+            return "There's nothing left to drink.", False
+        if liquid == "water":
+            return narrate([
+                "You sip from the clay ewer. The water is stale and stagnant — "
+                "it hasn't moved in years. You gag and stop.",
+                "You tip the ewer to your lips. The water tastes of old clay "
+                "and something you'd rather not identify. Not worth it.",
+            ]), True
+        # Other liquids in a container (e.g. lamp oil flask)
+        return f"Drinking {ent.name} would be a terrible idea.", False
 
     if "liquid" in ent.tags or ent.props.get("liquid"):
         return f"Drinking {ent.name} would be a terrible idea.", False

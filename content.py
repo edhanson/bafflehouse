@@ -185,7 +185,8 @@ def build_demo_world() -> World:
                 "A wide landing connecting both staircases. The floorboards "
                 "creak underfoot. Two doors lead off the landing — one to the east "
                 "and one to the west. The main staircase descends to the foyer; "
-                "a narrow servants' stair drops back down to the central hall."
+                "a narrow servants' stair in the south corner drops back down "
+                "to the central hall."
             ),
             exits={"down": "foyer", "south": "hall_2",
                    "east": "bedroom_east", "west": "bedroom_west"}
@@ -467,6 +468,7 @@ def build_demo_world() -> World:
             props={
                 "desc": "A small wooden box with a hinged lid. Something rattles faintly inside.",
                 "desc_empty": "A small wooden box with a hinged lid, now empty.",
+                "desc_closed_empty": "A small wooden box with a hinged lid. It is closed and feels light — nothing inside.",
                 "open": False
             },
             location="foyer"

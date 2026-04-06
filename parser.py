@@ -743,6 +743,8 @@ def rewrite_interaction_idioms(text: str) -> str:
         # DRINK / EAT idioms
         (r"^take\s+a\s+sip\s+of\s+(.+)$",     r"drink \1"),
         (r"^take\s+a\s+drink\s+of\s+(.+)$",   r"drink \1"),
+        (r"^drink\s+from\s+(.+)$",               r"drink \1"),
+        (r"^sip\s+from\s+(.+)$",                 r"drink \1"),
         (r"^take\s+a\s+bite\s+of\s+(.+)$",    r"eat \1"),
         (r"^take\s+a\s+taste\s+of\s+(.+)$",   r"eat \1"),
 
