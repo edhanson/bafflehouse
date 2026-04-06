@@ -215,15 +215,28 @@ JASPER_MESSAGES: Dict[Tuple[str, str], List[str]] = {
 }
 
 
-def get_message(npc_id: str, situation: str, disposition: str) -> Optional[str]:
+def get_message(
+    npc_id: str,
+    situation: str,
+    disposition: str,
+    display_name: Optional[str] = None,
+) -> Optional[str]:
     """
     Return a random atmospheric message for the given situation and disposition,
     or None if no messages are defined for that combination.
+
+    If display_name is provided and differs from the default ("the cat"),
+    occurrences of "The cat" and "the cat" in the message are replaced so
+    that Jasper's name appears once the player has learned it.
     """
     pool = JASPER_MESSAGES.get((situation, disposition), [])
     if not pool:
         return None
-    return random.choice(pool)
+    msg = random.choice(pool)
+    if display_name and display_name.lower() != "a grey cat":
+        msg = msg.replace("The cat", display_name.capitalize())
+        msg = msg.replace("the cat", display_name.lower())
+    return msg
 
 
 # ── NPC definition ────────────────────────────────────────────────────────
@@ -380,6 +393,14 @@ def npc_tick(
     WANDER_CHANCE_DEVOTED = 0.05
 
     if disposition == "devoted" and npc.defn.follows_when_devoted:
+        # Name reveal: fires exactly once the first time the cat becomes devoted
+        if not npc.revealed_name and same_room:
+            npc.revealed_name = True
+            messages.append(
+                f"Something shifts in the way {npc.defn.name} looks at you. "
+                f"You feel a genuine bond with the cat. "
+                f"You decide to name it {npc.defn.proper_name}."
+            )
         # Occasional independent wander even when devoted
         npc.just_fled = False  # clear flag at start of each tick
         if random.random() < WANDER_CHANCE_DEVOTED:
@@ -396,7 +417,7 @@ def npc_tick(
                     # If cat just left the player's room, say so
                     if was_with_player and not same_room:
                         messages.append(
-                            "The cat slips away into the next room."
+                            f"{npc.display_name.capitalize()} slips away into the next room."
                         )
         elif not same_room:
             # Follow the player
@@ -405,7 +426,7 @@ def npc_tick(
             same_room = True
             # Produce a "follows" message — distinct from enters_room
             # (which describes finding the cat already present).
-            msg = get_message(npc.npc_id, "follows", "devoted")
+            msg = get_message(npc.npc_id, "follows", "devoted", display_name=npc.display_name)
             if msg:
                 messages.append(msg)
             return messages
@@ -432,14 +453,14 @@ def npc_tick(
                 dest = _choose_wander_destination(npc, world, away_from=player_room)
                 if dest:
                     _move_npc(npc, dest, world)
-                    msg = get_message(npc.npc_id, "enters_room", "cautious")
+                    msg = get_message(npc.npc_id, "enters_room", "cautious", display_name=npc.display_name)
                     if msg:
                         messages.append(msg)
                     if npc.last_room == player_room:
                         memory.record(npc.npc_id, "player_startled")
             else:
                 # Stayed — produce a wary-style message to show hesitation
-                msg = get_message(npc.npc_id, "enters_room", "wary")
+                msg = get_message(npc.npc_id, "enters_room", "wary", display_name=npc.display_name)
                 if msg and player_moved:
                     messages.append(msg)
             return messages
@@ -471,13 +492,13 @@ def npc_tick(
         # Produce an enters_room or ambient message if the cat stayed
         if player_moved:
             # Player just arrived — enters_room message
-            msg = get_message(npc.npc_id, "enters_room", disposition)
+            msg = get_message(npc.npc_id, "enters_room", disposition, display_name=npc.display_name)
             if msg:
                 messages.append(msg)
         else:
             # Player was already here — occasional ambient message
             if random.random() < 0.25:
-                msg = get_message(npc.npc_id, "ambient", disposition)
+                msg = get_message(npc.npc_id, "ambient", disposition, display_name=npc.display_name)
                 if msg:
                     messages.append(msg)
 
@@ -498,13 +519,14 @@ def npc_tick(
             # If cat just left the player's room, produce a departure message
             if was_with_player:
                 disp = memory.disposition(npc.npc_id)
+                dn = npc.display_name.capitalize()
                 wander_msgs = {
-                    "wary":    "The cat moves away and slips into the next room.",
-                    "neutral": "The cat gets up and wanders off.",
-                    "friendly":"The cat trots off to investigate something.",
-                    "devoted": "The cat slips away into the next room.",
+                    "wary":    f"{dn} moves away and slips into the next room.",
+                    "neutral": f"{dn} gets up and wanders off.",
+                    "friendly":f"{dn} trots off to investigate something.",
+                    "devoted": f"{dn} slips away into the next room.",
                 }
-                msg = wander_msgs.get(disp, "The cat moves away.")
+                msg = wander_msgs.get(disp, f"{dn} moves away.")
                 messages.append(msg)
 
     return messages
@@ -527,11 +549,11 @@ def handle_pet_npc(
     if disposition in ("cautious", "wary"):
         # Reaching toward a still-wary cat is alarming — small trust penalty.
         memory.record(npc.npc_id, "player_startled")
-        msg = get_message(npc.npc_id, "pet_rejected", disposition)
+        msg = get_message(npc.npc_id, "pet_rejected", disposition, display_name=npc.display_name)
         return msg or f"{npc.display_name.capitalize()} backs away.", False
 
     memory.record(npc.npc_id, "player_petted")
-    msg = get_message(npc.npc_id, "petted", disposition)
+    msg = get_message(npc.npc_id, "petted", disposition, display_name=npc.display_name)
     return msg or f"You pet {npc.display_name}.", True
 
 
@@ -578,7 +600,7 @@ def handle_feed_npc(
     memory.record(npc.npc_id, event)
     new_disposition = memory.disposition(npc.npc_id)
 
-    msg = get_message(npc.npc_id, situation, new_disposition)
+    msg = get_message(npc.npc_id, situation, new_disposition, display_name=npc.display_name)
     return msg or f"You feed {npc.display_name} {food_ent.name}.", True
 
 
@@ -601,7 +623,7 @@ def handle_offer_npc(
     memory.record(npc.npc_id, "player_offered_item")
     disposition = memory.disposition(npc.npc_id)
 
-    msg = get_message(npc.npc_id, "offered_item", disposition)
+    msg = get_message(npc.npc_id, "offered_item", disposition, display_name=npc.display_name)
     return (
         msg or f"You hold out {item_ent.name}. {npc.display_name.capitalize()} notices."
     ), True
@@ -614,7 +636,7 @@ def handle_call_npc(
     Player calls or speaks to the NPC.  No trust change — purely narrative.
     """
     disposition = memory.disposition(npc.npc_id)
-    msg = get_message(npc.npc_id, "called", disposition)
+    msg = get_message(npc.npc_id, "called", disposition, display_name=npc.display_name)
     return msg or "Nothing happens.", True
 
 

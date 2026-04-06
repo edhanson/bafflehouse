@@ -276,7 +276,7 @@ def do_look(world: World, show_npcs: bool = True) -> str:
 
 
 def do_inventory(world: World) -> str:
-    """List carried items, noting which ones are currently worn."""
+    """List carried items, noting which ones are worn or wielded."""
     if not world.player.inventory:
         return "You are empty-handed."
 
@@ -284,6 +284,8 @@ def do_inventory(world: World) -> str:
     for eid in world.player.inventory:
         ent = world.entity(eid)
         label = ent.name
+        if eid == world.player.wielded_weapon:
+            label += " (wielded)"
         if ent.props.get("worn", False):
             label += " (worn)"
         if ent.props.get("lit", False):
