@@ -531,8 +531,9 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     # Priority order:
     #   1. Liquid container that has been emptied (empty=True)
     #   2. Solid container that is open and has no contents
-    #   3. Scenery with a state-dependent desc_open (e.g. bricked_wall)
-    #   4. Default desc
+    #   3. Item opened with a tool (e.g. the cat food tin)
+    #   4. Scenery with a state-dependent desc_open (e.g. bricked_wall)
+    #   5. Default desc
     _is_empty_liquid = ent.props.get("empty", False) and "desc_empty" in ent.props
     _is_empty_solid  = (
         "container" in ent.tags
@@ -543,6 +544,8 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
     )
     if _is_empty_liquid or _is_empty_solid:
         desc = ent.props["desc_empty"]
+    elif ent.props.get("opened", False) and "desc_opened" in ent.props:
+        desc = ent.props["desc_opened"]
     elif ("desc_open" in ent.props
           and world.rooms.get(world.player.location, None) is not None
           and world.rooms[world.player.location].exits.get("north") == "cellar"):
@@ -657,16 +660,20 @@ def handle_drop(world: World, ir: dict) -> Tuple[str, bool]:
 
 def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
     """Open an openable entity (door, container, etc.)."""
-    obj = ir.get("obj")
+    obj  = ir.get("obj")
+    iobj = ir.get("iobj")
     prep = ir.get("prep")
+    raw  = ir.get("raw", "")
 
     if not obj:
         return "Open what?", False
 
-    if prep is not None:
-        if prep == "with":
-            return "You can't open things with that. Perhaps you mean UNLOCK something WITH it.", False
-        return "I don't understand that phrasing.", False
+    # If the obj phrase contains "with", extract the tool from the raw text.
+    # This handles "open tin with can opener" when the parser doesn't split it.
+    if obj and " with " in str(obj) and not iobj:
+        parts = str(obj).split(" with ", 1)
+        obj  = parts[0].strip() or obj
+        iobj = parts[1].strip() or None
 
     if obj not in world.entities:
         return "You don't see that here.", False
@@ -676,6 +683,41 @@ def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
         return err, False
 
     ent = world.entity(obj)
+
+    # Items with a tool_required prop must be opened with the right tool
+    tool_id = ent.props.get("tool_required")
+    if tool_id:
+        if ent.props.get("opened", False):
+            return "It's already open.", False
+        # Resolve iobj phrase to entity id if it's still a raw phrase
+        tool_eid = iobj
+        if tool_eid and tool_eid not in world.entities:
+            # Try to match iobj phrase against entity aliases
+            for eid, ent2 in world.entities.items():
+                if any(tool_eid in a.lower() or a.lower() in tool_eid
+                       for a in ent2.all_names()):
+                    if eid in world.player.inventory:
+                        tool_eid = eid
+                        break
+        has_tool = (
+            (tool_eid and tool_eid == tool_id and tool_id in world.player.inventory)
+            or (not tool_eid and tool_id in world.player.inventory)
+        )
+        if not has_tool:
+            tool_ent = world.entities.get(tool_id)
+            tool_name = tool_ent.name if tool_ent else "the right tool"
+            return f"You'll need {tool_name} to open that.", False
+        ent.props["opened"] = True
+        world.note_ref([obj])
+        return narrate([
+            "You work the can opener around the lid. It peels back with a "
+            "sharp metallic snap. The smell hits you immediately.",
+            "The can opener does its job. The lid comes free with a ragged edge.",
+        ]), True
+
+    if prep is not None and iobj is not None:
+        return "You can't open things with that. Perhaps you mean UNLOCK something WITH it.", False
+
     if "openable" not in ent.tags:
         return "That's not something you can open.", False
     if ent.props.get("open", False):
@@ -986,7 +1028,18 @@ def handle_read(world: World, ir: dict) -> Tuple[str, bool]:
     if "readable" not in ent.tags:
         return "There's nothing on it worth reading.", False
 
-    text = ent.props.get("readable_text", "")
+    # If the entity has a magnified text variant and the player has a lens,
+    # return the full magnified version instead of the standard text.
+    has_lens = any(
+        "lens" in world.entity(eid).tags or eid == "magnifying_glass"
+        for eid in world.player.inventory
+        if eid in world.entities
+    )
+    if has_lens and "readable_text_magnified" in ent.props:
+        text = ent.props["readable_text_magnified"]
+    else:
+        text = ent.props.get("readable_text", "")
+
     if not text:
         return "The writing is too faded to make out.", False
 
@@ -1219,8 +1272,8 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
         # "east" exit would lead back to the cellar top, but we instead route
         # it back to the cellar for simplicity (the foyer route still works).
         world.rooms["hall_3"].exits["north"]        = "cellar_passage"
-        world.rooms["cellar_passage"].exits["south"] = "hall_3"
-        world.rooms["cellar"].exits["north"]        = "cellar_passage"
+        world.rooms["cellar_passage"].exits["north"] = "hall_3"
+        world.rooms["cellar"].exits["north"]         = "cellar_passage"
         world.note_ref([obj])
 
         return (

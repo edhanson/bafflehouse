@@ -585,6 +585,15 @@ def handle_feed_npc(
             "and turns away. It isn't interested in that."
         ), False
 
+    # Items that require opening (e.g. the tin) must be opened first
+    if is_food and food_ent.props.get("tool_required") and not food_ent.props.get("opened", False):
+        tool_id  = food_ent.props["tool_required"]
+        tool_ent = world.entities.get(tool_id)
+        tool_name = tool_ent.name if tool_ent else "the right tool"
+        return (
+            f"The tin is still sealed. You'll need {tool_name} to open it first."
+        ), False
+
     # Determine event type from food tags
     if is_catnip:
         event = "player_gave_catnip"

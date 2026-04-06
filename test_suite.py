@@ -408,6 +408,7 @@ def test_puzzles() -> Suite:
     # Puzzle 2: journal -> antler -> display key -> case
     w = fresh()
     w.player.location = "hall_1"
+    move_entity(w, "magnifying_glass", "player")  # needed to read small text
     out, _ = cmd(w, "read journal")
     s.check("puzzle 2: read journal gives antler clue",
             "antler" in out.lower() or "stag" in out.lower())
@@ -596,12 +597,19 @@ def test_verb_handlers() -> Suite:
     s.check("remove ring -> worn prop cleared",
             not w.entities["silver_ring"].props.get("worn"))
 
-    # Read
+    # Read (requires magnifying glass for the key passage)
     w = fresh()
     w.player.location = "hall_1"
+    move_entity(w, "magnifying_glass", "player")
     out, _ = cmd(w, "read journal")
-    s.check("read journal -> antler clue",
+    s.check("read journal -> antler clue (with magnifying glass)",
             "antler" in out.lower() or "stag" in out.lower(), out)
+    # Without magnifying glass, key passage is illegible
+    w2 = fresh()
+    w2.player.location = "hall_1"
+    out2, _ = cmd(w2, "read journal")
+    s.check("read journal without lens -> no antler clue",
+            "antler" not in out2.lower() and "stag" not in out2.lower(), out2)
 
     # Pull stag
     w = fresh()
@@ -1121,13 +1129,13 @@ def test_npc_jasper() -> Suite:
     s.check("kitchen room added",       "kitchen"        in w.rooms)
     s.check("cellar_passage added",     "cellar_passage" in w.rooms)
     s.check("jasper entity present",    "jasper"         in w.entities)
-    s.check("cat_food in kitchen",      w.entities["cat_food"].location == "kitchen")
+    s.check("cat_food in forest_b",     w.entities["cat_food"].location == "forest_b")
     s.check("catnip starts hidden",     w.entities["catnip"].location == "hidden")
     s.check("catnip not visible yet",   not w.entities["catnip"].props.get("visible"))
     # cellar north exit is added dynamically by the lever — absent at startup
     s.check("cellar has no north exit at start",
             "north" not in w.rooms["cellar"].exits)
-    s.check("passage east->cellar",     w.rooms["cellar_passage"].exits.get("east") == "cellar")
+    s.check("passage south->cellar",    w.rooms["cellar_passage"].exits.get("south") == "cellar")
     s.check("passage west->kitchen",    w.rooms["cellar_passage"].exits.get("west") == "kitchen")
 
     # ── Catnip reveal ─────────────────────────────────────────
@@ -1156,8 +1164,8 @@ def test_npc_jasper() -> Suite:
     s.check("cellar north -> cellar_passage", w.player.location == "cellar_passage")
     cmd(w, "go west")
     s.check("cellar_passage west -> kitchen", w.player.location == "kitchen")
-    out, _ = cmd(w, "take cat food")
-    s.check("cat_food takeable in kitchen",   "cat_food" in w.player.inventory, out)
+    # cat_food moved to forest_b — kitchen access test just confirms kitchen reachable
+    s.check("kitchen reachable via cellar passage", w.player.location == "kitchen")
 
     # ── Jasper starting disposition ───────────────────────────
     w = npc_fresh()
@@ -1203,6 +1211,7 @@ def test_npc_jasper() -> Suite:
     jasper = place_jasper(w, "hall_1")
     set_trust(neutral=True)
     move_entity(w, "cat_food", "player")
+    w.entities["cat_food"].props["opened"] = True  # bypass can-opener for this test
     t0 = NPC_MEMORY.trust("jasper")
     out, _ = cmd(w, "feed cat food to cat")
     s.check("feed -> food consumed",
@@ -1216,6 +1225,7 @@ def test_npc_jasper() -> Suite:
     w = npc_fresh(); w.player.location = "hall_2"
     jasper = place_jasper(w, "hall_2")
     move_entity(w, "cat_food", "player")
+    w.entities["cat_food"].props["opened"] = True  # bypass can-opener for this test
     cmd(w, "feed cat food to cat")   # -> neutral
     w.player.location = "entryway"
     jasper = place_jasper(w, "entryway")
@@ -1445,6 +1455,7 @@ def test_npc_jasper() -> Suite:
     jasper = place_jasper(w, "hall_2")
     set_trust(neutral=True)
     move_entity(w, "cat_food", "player")
+    w.entities["cat_food"].props["opened"] = True  # bypass can-opener for this test
     out, _ = cmd(w, "feed cat food to cat")
     s.check("cat food accepted",
             w.entities["cat_food"].location == "consumed", out)

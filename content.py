@@ -361,20 +361,20 @@ def build_demo_world() -> World:
             exits={"east": "cellar_passage"}
         ),
         # Cellar passage — the room revealed when the lever is pulled.
-        # Connects hall_3 (south) to the wine cellar (east) to the kitchen (west).
+        # Connects hall_3 (north) to the wine cellar (south) to the kitchen (west).
         # NOTE: "south" exit to hall_3 is added dynamically by the lever puzzle.
         "cellar_passage": Room(
             rid="cellar_passage",
             title="Cellar Passage",
             desc=(
-                "A low stone passage running east-west, smelling of damp and old "
-                "wood. Pale light falls from an opening in the ceiling to the south, "
-                "leading up to the hall above. Steps to the east descend to the "
-                "wine cellar. A door to the west stands open onto what was once "
-                "the kitchen."
+                "A low stone passage smelling of damp and old wood. "
+                "Steps to the south descend to the wine cellar. "
+                "A door to the west stands open onto what was once the kitchen. "
+                "A bricked-over arch in the north wall hints at a former connection "
+                "to the hall above."
             ),
-            exits={"east": "cellar", "west": "kitchen"}
-            # NOTE: "south" to hall_3 added dynamically by lever puzzle.
+            exits={"south": "cellar", "west": "kitchen"}
+            # NOTE: "north" to hall_3 added dynamically by lever puzzle.
         ),
         "cellar": Room(
             rid="cellar",
@@ -794,6 +794,11 @@ def build_demo_world() -> World:
                 "desc": "A leather-bound journal with a worn cover. The entries inside are cramped and hurried.",
                 "readable_text": (
                     "The handwriting is cramped and hurried. Most entries are mundane "
+                    "household accounts. Near the back, one entry is written in a "
+                    "much smaller hand — too small to read without a lens."
+                ),
+                "readable_text_magnified": (
+                    "The handwriting is cramped and hurried. Most entries are mundane "
                     "household accounts, but near the back you find an entry that reads:\n\n"
                     "\"I have hidden the reserve key in the old way — the stag knows "
                     "where it rests. A firm pull on the heavy antler will remind him.\""
@@ -1163,6 +1168,18 @@ def build_demo_world() -> World:
             )},
             location="bedroom_east"
         ),
+        "magnifying_glass": Entity(
+            eid="magnifying_glass",
+            name="a magnifying glass",
+            aliases=["magnifying glass", "magnifier", "lens", "glass",
+                     "loupe", "reading glass", "hand lens"],
+            tags={"portable"},
+            props={"desc": (
+                "A small brass-handled magnifying glass. The lens is clear and "
+                "strong — useful for reading cramped or faded text."
+            )},
+            location="bedroom_west"
+        ),
         "upstairs_wardrobe": Entity(
             eid="upstairs_wardrobe",
             name="the wardrobe",
@@ -1458,8 +1475,14 @@ def build_demo_world() -> World:
                     "The label shows a contented-looking cat. "
                     "It smells strongly even through the sealed lid."
                 ),
+                "desc_opened": (
+                    "A tin of cat food, lid peeled back. "
+                    "The smell is immediate and pungent."
+                ),
+                "opened": False,    # must be opened with can_opener before feeding
+                "tool_required": "can_opener",
             },
-            location="kitchen"
+            location="forest_b"
         ),
         "kitchen_range": Entity(
             eid="kitchen_range",
