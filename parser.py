@@ -48,7 +48,7 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
     ),
     "go": VerbDefinition(
         verb_id="go",
-        literal_forms=["go", "walk", "run", "head", "move"],
+        literal_forms=["go", "walk", "run", "head"],
         semantic_examples=[
             "move in a direction",
             "travel north",
@@ -396,7 +396,7 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
     # BLOCK — declare a shield-based defensive action in combat.
     "block": VerbDefinition(
         verb_id="block",
-        literal_forms=["block", "shield", "parry", "defend", "guard"],
+        literal_forms=["block", "parry", "defend", "guard"],
         semantic_examples=[
             "block an attack",
             "raise my shield",
@@ -605,6 +605,7 @@ def rewrite_movement_idioms(text: str) -> str:
         (r"^walk\s+(north|south|east|west|up|down)$", r"go \1"),
         (r"^run\s+(north|south|east|west|up|down)$", r"go \1"),
         (r"^move\s+(north|south|east|west|up|down)$", r"go \1"),
+        (r"^move\s+(.+)$",                            r"push \1"),
         (r"^go\s+upstairs$",                         r"go up"),
         (r"^go\s+downstairs$",                       r"go down"),
         (r"^climb\s+up$",                            r"go up"),
@@ -1338,7 +1339,6 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "say to":       "call",
 
     # block-family
-    "shield":      "block",
     "parry":       "block",
     "deflect":     "block",
     # attack-family (additional)
@@ -1349,6 +1349,22 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "lunge at":     "attack",
     "charge at":    "attack",
     "charge":       "attack",
+
+    # Common misspellings — route to the intended verb rather than
+    # producing a parse failure.
+    "weild":        "wield",
+    "weld":         "wield",
+    "examone":      "examine",
+    "exmine":       "examine",
+    "investiagate": "examine",
+    "lookt":        "look",
+    "tke":          "take",
+    "taek":         "take",
+    "drpo":         "drop",
+    "opne":         "open",
+    "clsoe":        "close",
+    "ulock":        "unlock",
+    "unlcok":       "unlock",
 }
 
 # Pre-sort synonym keys by length descending so longer phrases match first.

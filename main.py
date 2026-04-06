@@ -258,7 +258,7 @@ def main() -> None:
             except (EOFError, KeyboardInterrupt):
                 break
             normalised = normalize(line)
-            if normalised in {"", "restart"}:
+            if normalised == "restart":
                 # Full restart — rebuild world and reset engine state
                 import engine as _eng
                 import pathlib as _pl
@@ -277,13 +277,13 @@ def main() -> None:
                 print_and_log(msg, log)
                 print_and_log(do_look(world), log)
                 continue
-            elif normalised in {"quit", "exit"}:
+            elif normalised in {"", "quit", "exit"}:
                 farewell = "Farewell."
                 print(farewell)
                 log.log_output(farewell)
                 break
             else:
-                print("You are dead. Press Enter to quit or type RESTART.")
+                print("You are dead. Press Enter to quit, or type RESTART to begin again.")
             continue
 
         prompt = f"\n[{world.clock.now}] > "

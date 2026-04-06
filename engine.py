@@ -228,7 +228,19 @@ def do_look(world: World, show_npcs: bool = True) -> str:
     # print "You see nothing of interest." even in a room full of
     # interesting-but-fixed things, which misleads the player.
     if visible_non_scenery:
-        things = ", ".join(world.entity(eid).name for eid in visible_non_scenery)
+        mounted_items   = [eid for eid in visible_non_scenery
+                           if "mounted" in world.entity(eid).tags]
+        portable_items  = [eid for eid in visible_non_scenery
+                           if "mounted" not in world.entity(eid).tags]
+        parts = []
+        if portable_items:
+            parts.append(", ".join(world.entity(eid).name for eid in portable_items))
+        if mounted_items:
+            mounted_names = ", ".join(
+                world.entity(eid).name + " (mounted)" for eid in mounted_items
+            )
+            parts.append(mounted_names)
+        things = ", ".join(parts)
         lines.append(f"You see {things}.")
 
     # Describe any NPCs present in the room — only when the player
@@ -2350,7 +2362,14 @@ def process_input(
         intent = candidates[0]
 
         if intent["type"] == "missing_verb":
-            outputs.append(f"What do you want to do with the {intent['text']}?")
+            # The parser found a noun phrase but no recognisable verb.
+            # This could be a bare noun ("brass key") or a mistyped command.
+            # Rather than awkwardly asking "What do you want to do with X?",
+            # give a neutral parse failure message.
+            outputs.append(
+                f"Your command couldn't be interpreted. "
+                f"(Did you mean something else?)"
+            )
             continue
 
         if intent["type"] == "meta":
