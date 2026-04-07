@@ -32,6 +32,7 @@ from combat import (
     combat_status, WEAPON_STATS,
 )
 from npc_bayesian import NPCMemory
+from savegame import save_game
 from parser import (
     DIRECTIONS,
     ParserSystem,
@@ -2142,6 +2143,16 @@ def _move_entity_to(world: World, eid: str, dest: str) -> None:
             world.rooms[dest].entities.append(eid)
 
 
+def handle_save(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Save the current game state to bafflehouse_save.json.
+    Blocked during active combat.
+    """
+    in_combat = _COMBAT_SESSION is not None
+    msg = save_game(world, in_combat=in_combat)
+    return msg, not in_combat
+
+
 def handle_answer(world: World, ir: dict) -> Tuple[str, bool]:
     """
     Player answers the troll's riddle.
@@ -2210,6 +2221,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "call":       handle_call,
     "answer":     handle_answer,
     "block":      handle_block,
+    "save":       handle_save,
 }
 
 
@@ -2322,6 +2334,9 @@ def process_input(
         normalised_input = normalize(text)
         if normalised_input in {"look", "l", "inventory", "inv", "i"}:
             pass   # allow look/inv during combat
+        elif normalised_input == "save":
+            # Save is allowed but blocked with a message during combat
+            return handle_save(world, {})[0], None
         else:
             narrative = _execute_combat_action(world, normalised_input)
             world.clock.advance(1)
@@ -2377,6 +2392,8 @@ def process_input(
                 outputs.append(do_look(world))
             elif intent["verb"] == "inventory":
                 outputs.append(do_inventory(world))
+            elif intent["verb"] == "save":
+                outputs.append(handle_save(world, intent)[0])
             else:
                 outputs.append("Not implemented.")
             continue

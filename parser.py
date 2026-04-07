@@ -405,6 +405,14 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         shape="verb_obj",
     ),
 
+    # SAVE — write game state to disk.
+    "save": VerbDefinition(
+        verb_id="save",
+        literal_forms=["save"],
+        semantic_examples=["save the game", "save my progress"],
+        shape="verb_only",
+    ),
+
     # ATTACK/KICK — hostile action against an NPC or object.
     # Routes to handle_attack in engine; for NPCs this damages trust.
     "attack": VerbDefinition(

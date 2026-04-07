@@ -36,6 +36,7 @@ os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 from content import build_demo_world
 from engine import do_look, process_input
 from parser import ParserSystem, normalize
+from savegame import save_exists, read_save_file, load_game, save_summary
 
 
 # ============================================================
@@ -244,7 +245,33 @@ def main() -> None:
     print_and_log(msg, log)
     print()
 
+    # ── Resume from save? ─────────────────────────────────────────────────
+    resumed = False
+    if save_exists():
+        save_data = read_save_file()
+        if save_data:
+            summary = save_summary(save_data)
+            print(f"  A saved game was found: {summary}")
+            try:
+                choice = input("  Resume it? [Y/n] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                choice = "n"
+            if choice in ("", "y", "yes"):
+                result = load_game(world, save_data)
+                if result == "ok":
+                    print("  Resumed.\n")
+                    log.log_output(f"Resumed save: {summary}")
+                    resumed = True
+                else:
+                    print(f"  Could not load save: {result}")
+                    print("  Starting a new game.\n")
+            else:
+                print("  Starting a new game.\n")
+        else:
+            print("  Save file found but could not be read. Starting fresh.\n")
+
     initial_look = do_look(world)
+    print_and_log(initial_look, log)
     print_and_log(initial_look, log)
 
     # ── Game loop ─────────────────────────────────────────────────────────

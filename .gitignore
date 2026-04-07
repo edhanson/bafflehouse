@@ -15,6 +15,7 @@ models/
 npc_memory.json
 troll_memory.json
 combat_memory.json
+bafflehouse_save.json
 
 # ── Python bytecode and caches ────────────────────────────────
 __pycache__/
