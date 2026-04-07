@@ -176,8 +176,8 @@ def test_world_structure() -> Suite:
 
     s.check("display_key starts hidden",
             w.entities["display_key"].location == "hidden")
-    s.check("ancient_scroll starts hidden",
-            w.entities["ancient_scroll"].location == "hidden")
+    s.check("jeweled_amulet starts hidden",
+            w.entities["jeweled_amulet"].location == "hidden")
 
     s.check("journal location is hall_1",
             w.entities["journal"].location == "hall_1")
@@ -431,15 +431,15 @@ def test_puzzles() -> Suite:
     s.check("puzzle 2: folded_letter hints at basin puzzle",
             "basin" in out.lower() or "ring" in out.lower())
 
-    # Puzzle 3: wear ring + pour water + scroll
+    # Puzzle 3: wear ring + pour water + amulet
     w2 = fresh()
     w2.player.location = "secret_study"
     move_entity(w2, "water_ewer", "player")
     cmd(w2, "pour water into basin")
     s.check("puzzle 3: basin not activated without ring",
             not w2.entities["stone_basin"].props.get("activated"))
-    s.check("puzzle 3: scroll still hidden without ring",
-            w2.entities["ancient_scroll"].location == "hidden")
+    s.check("puzzle 3: amulet still hidden without ring",
+            w2.entities["jeweled_amulet"].location == "hidden")
 
     w3 = fresh()
     w3.player.location = "secret_study"
@@ -452,13 +452,13 @@ def test_puzzles() -> Suite:
     out3, _ = cmd(w3, "pour water into basin")
     s.check("puzzle 3: basin activated with ring",
             w3.entities["stone_basin"].props.get("activated"))
-    s.check("puzzle 3: scroll revealed in basin",
-            w3.entities["ancient_scroll"].location == "stone_basin")
+    s.check("puzzle 3: amulet revealed in basin",
+            w3.entities["jeweled_amulet"].location == "stone_basin")
 
-    move_entity(w3, "ancient_scroll", "player")
-    out4, _ = cmd(w3, "read scroll")
-    s.check("puzzle 3: scroll is readable",
-            "cellar" in out4.lower() or "vault" in out4.lower())
+    move_entity(w3, "jeweled_amulet", "player")
+    out4, _ = cmd(w3, "examine amulet")
+    s.check("puzzle 3: amulet is examinable",
+            "serpent" in out4.lower() or "amulet" in out4.lower() or "stone" in out4.lower(), out4)
 
     w4 = fresh()
     w4.player.location = "secret_study"
@@ -652,8 +652,8 @@ def test_verb_handlers() -> Suite:
     w.entities["silver_ring"].props["worn"] = True
     cmd(w, "pour water into basin")
     out, _ = cmd(w, "examine basin")
-    s.check("examine activated basin -> lists scroll",
-            "scroll" in out.lower(), out)
+    s.check("examine activated basin -> lists amulet",
+            "amulet" in out.lower(), out)
 
     return s
 

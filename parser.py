@@ -413,6 +413,23 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         shape="verb_only",
     ),
 
+    # REST — recover stamina (not usable in combat).
+    "rest": VerbDefinition(
+        verb_id="rest",
+        literal_forms=["rest", "wait", "pause", "relax", "sit", "sit down",
+                       "catch my breath", "catch breath"],
+        semantic_examples=["rest for a moment", "catch my breath", "take a break"],
+        shape="verb_only",
+    ),
+
+    # STATUS — report HP, stamina, and equipped items.
+    "status": VerbDefinition(
+        verb_id="status",
+        literal_forms=["status", "stats", "stat"],
+        semantic_examples=["check my status", "show my stats", "how am I doing"],
+        shape="verb_only",
+    ),
+
     # ATTACK/KICK — hostile action against an NPC or object.
     # Routes to handle_attack in engine; for NPCs this damages trust.
     "attack": VerbDefinition(
@@ -1357,6 +1374,10 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "lunge at":     "attack",
     "charge at":    "attack",
     "charge":       "attack",
+
+    # wait/rest family
+    "z":            "rest",   # classic IF "wait" command
+    "zz":           "rest",
 
     # Common misspellings — route to the intended verb rather than
     # producing a parse failure.

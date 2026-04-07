@@ -980,7 +980,7 @@ def build_demo_world() -> World:
 
         # The stone basin is the target of POUR water (while wearing ring).
         # engine.py's handle_pour checks for the ring and sets "activated": True,
-        # then moves ancient_scroll from "hidden" into the basin.
+        # then moves jeweled_amulet from "hidden" into the basin.
         "stone_basin": Entity(
             eid="stone_basin",
             name="a stone basin",
@@ -998,19 +998,22 @@ def build_demo_world() -> World:
             location="secret_study"
         ),
         # The ancient scroll starts hidden; revealed when Puzzle 3 fires.
-        "ancient_scroll": Entity(
-            eid="ancient_scroll",
-            name="an ancient scroll",
-            aliases=["scroll", "ancient scroll", "parchment", "roll of parchment"],
-            tags={"portable", "readable"},
+        "jeweled_amulet": Entity(
+            eid="jeweled_amulet",
+            name="a jeweled amulet",
+            aliases=["amulet", "jeweled amulet", "jewelled amulet", "necklace",
+                     "pendant", "medallion", "serpent amulet"],
+            tags={"portable", "wearable", "magical"},
             props={
-                "desc": "A tightly rolled scroll of yellowed parchment, sealed with wax.",
-                "readable_text": (
-                    "The text is written in an archaic hand, but legible:\n\n"
-                    "\"To he who bears the Serpent Ring and brings the water of patience: "
-                    "the lower vault is opened by speaking the three words carved into "
-                    "the cellar's eastern wall. Go there now and look carefully.\""
+                "desc": (
+                    "A heavy amulet of green-black stone set in tarnished silver, "
+                    "carved in the shape of two coiled serpents. It is cold to the touch "
+                    "but seems to pulse faintly when held — or perhaps that is just "
+                    "your heartbeat. Whatever it is, it did not come from this world "
+                    "to be left in a basin."
                 ),
+                "worn":         False,
+                "damage_bonus": 1,     # +1 damage on successful attacks when worn
             },
             location="hidden"
         ),
@@ -1134,7 +1137,8 @@ def build_demo_world() -> World:
                     "Their eyes are tiny chips of green stone. It has an air of "
                     "quiet significance."
                 ),
-                "worn": False,
+                "worn":     False,
+                "hp_regen": 1,   # +1 HP per turn when worn, up to max
             },
             location="display_case"
         ),

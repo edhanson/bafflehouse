@@ -190,6 +190,7 @@ class CombatSession:
     golem_defeated:     bool  = False
     jasper_present:     bool  = False    # True when devoted cat is in room
     jasper_rattled:     bool  = False    # True after golem hits Jasper
+    wearing_amulet:     bool  = False    # True when jeweled amulet is worn
     acid_cooldown:      int   = 0        # turns until acid can fire again
     acid_total:         int   = 0        # total acid attacks this session
     ACID_COOLDOWN_MIN:  int   = 3        # minimum turns between acid attacks
@@ -504,6 +505,13 @@ def resolve_exchange(
         else:
             lines.append(_pick(_PLAYER_ATTACKS.get(session.weapon_id,
                                _PLAYER_ATTACKS["bare_hands"])))
+        # Amulet bonus: +1 damage on every successful hit
+        if session.wearing_amulet:
+            base_dmg += session.wearing_amulet  # True == 1
+            lines.append(
+                "The amulet glows faintly as a mysterious power courses "
+                "through your veins."
+            )
         golem_dmg += base_dmg
         reward += REWARDS["hit_landed"]
 
@@ -522,6 +530,13 @@ def resolve_exchange(
             )))
         if session.stamina_low():
             total = max(1, int(total * 0.6))
+        # Amulet bonus: +1 damage on every successful hit
+        if session.wearing_amulet and golem_action != "defensive":
+            total += 1
+            lines.append(
+                "The amulet glows faintly as a mysterious power courses "
+                "through your veins."
+            )
         golem_dmg += total
         reward += REWARDS["hit_landed"] * 1.5
 
@@ -694,12 +709,14 @@ def start_combat(
     wearing_coif: bool = False,
     wearing_shield: bool = False,
     jasper_present: bool = False,
+    wearing_amulet: bool = False,
 ) -> str:
     """Initialise combat state and return the opening narrative."""
     session.weapon_id      = weapon_id
     session.wearing_coif   = wearing_coif
     session.wearing_shield = wearing_shield
     session.jasper_present = jasper_present
+    session.wearing_amulet = wearing_amulet
     return _pick(_OPENING) + "\n\n" + _combat_prompt(session)
 
 

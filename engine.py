@@ -308,6 +308,34 @@ def do_inventory(world: World) -> str:
     return f"You are carrying: {', '.join(parts)}."
 
 
+def do_status(world: World) -> str:
+    """Report player HP, stamina, and equipped items."""
+    hp      = world.player.hp
+    max_hp  = world.player.max_hp
+    st      = world.player.stamina
+    max_st  = world.player.max_stamina
+
+    # Weapon
+    wid = world.player.wielded_weapon
+    if wid and wid in world.entities:
+        weapon_str = world.entities[wid].name
+    else:
+        weapon_str = "your bare hands"
+
+    # Worn items
+    worn = []
+    for eid in world.player.worn_armour:
+        if eid in world.entities:
+            worn.append(world.entities[eid].name)
+    worn_str = ", ".join(worn) if worn else "nothing"
+
+    return (
+        f"HP: {hp}/{max_hp}  Stamina: {st}/{max_st}\n"
+        f"Wielding: {weapon_str}\n"
+        f"Wearing:  {worn_str}"
+    )
+
+
 # ============================================================
 # Execution helpers
 # ============================================================
@@ -1404,15 +1432,15 @@ def _apply_liquid_to_vessel(
         vessel_ent.props["activated"] = True
         vessel_ent.props["liquid"] = "water"
         source_ent.props["empty"] = True
-        move_entity(world, "ancient_scroll", "stone_basin")
-        world.note_ref([vessel_eid, source_eid, "ancient_scroll"])
+        move_entity(world, "jeweled_amulet", "stone_basin")
+        world.note_ref([vessel_eid, source_eid, "jeweled_amulet"])
         return (
             "The moment the water touches the basin, the ring on your finger grows warm. "
             "The carved serpents seem to writhe — a trick of the light, surely — and "
             "the water begins to glow with a faint green luminescence.\n\n"
-            "Something rises from beneath the water: a tightly rolled scroll, bone dry "
-            "despite the liquid around it. It comes to rest at the basin's rim as if "
-            "placed there by an invisible hand."
+            "Something rises from beneath the water: a heavy amulet of green-black stone, "
+            "bone dry despite the water around it. It comes to rest at the basin's rim as "
+            "if placed there by an invisible hand."
         ), True
 
     # Generic: pour any liquid into any open container.
@@ -1927,10 +1955,12 @@ def handle_attack(world: World, ir: dict) -> Tuple[str, bool]:
         weapon_id     = _get_player_weapon_id(world)
         wearing_coif  = "chain_coif" in world.player.worn_armour
         wearing_shield= "kite_shield" in world.player.worn_armour
+        wearing_amulet= "jeweled_amulet" in world.player.worn_armour
         jasper_present= _get_jasper_present(world)
         opening = start_combat(
             _COMBAT_SESSION, weapon_id, wearing_coif,
-            wearing_shield, jasper_present
+            wearing_shield, jasper_present,
+            wearing_amulet=wearing_amulet,
         )
         world.player.hp = _COMBAT_SESSION.player_hp
         return opening, True
@@ -2012,9 +2042,10 @@ def _execute_combat_action(world: World, action: str) -> str:
 
     learner = COMBAT_MEMORY.learner("slime_golem")
 
-    # Refresh Jasper's combat presence each round — he may arrive mid-fight
+    # Refresh Jasper and amulet state each round
     if _COMBAT_SESSION is not None:
         _COMBAT_SESSION.update_jasper(_get_jasper_present(world))
+        _COMBAT_SESSION.wearing_amulet = "jeweled_amulet" in world.player.worn_armour
 
     narrative, outcome = process_player_combat_action(
         session      = _COMBAT_SESSION,
@@ -2143,6 +2174,34 @@ def _move_entity_to(world: World, eid: str, dest: str) -> None:
             world.rooms[dest].entities.append(eid)
 
 
+def handle_rest(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Rest for a turn — recovers a significant amount of stamina.
+    Cannot be used during active combat.
+    Stamina only; wounds require the silver ring's regen.
+    """
+    if _COMBAT_SESSION is not None:
+        return "There is no time to rest.", False
+
+    STAMINA_REST = 25
+    before = world.player.stamina
+    world.player.stamina = min(world.player.max_stamina,
+                               world.player.stamina + STAMINA_REST)
+    gained = world.player.stamina - before
+
+    if gained == 0:
+        return "You are already at full stamina.", False
+
+    return narrate([
+        f"You take a moment to catch your breath. "
+        f"(Stamina +{gained})",
+        f"You lean against the wall and breathe slowly. "
+        f"(Stamina +{gained})",
+        f"You rest briefly. "
+        f"(Stamina +{gained})",
+    ]), True
+
+
 def handle_save(world: World, ir: dict) -> Tuple[str, bool]:
     """
     Save the current game state to bafflehouse_save.json.
@@ -2222,6 +2281,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "answer":     handle_answer,
     "block":      handle_block,
     "save":       handle_save,
+    "rest":       handle_rest,
 }
 
 
@@ -2337,6 +2397,8 @@ def process_input(
         elif normalised_input == "save":
             # Save is allowed but blocked with a message during combat
             return handle_save(world, {})[0], None
+        elif normalised_input in {"rest", "z", "zz", "wait"}:
+            return "There is no time to rest.", None
         else:
             narrative = _execute_combat_action(world, normalised_input)
             world.clock.advance(1)
@@ -2394,6 +2456,13 @@ def process_input(
                 outputs.append(do_inventory(world))
             elif intent["verb"] == "save":
                 outputs.append(handle_save(world, intent)[0])
+            elif intent["verb"] == "status":
+                outputs.append(do_status(world))
+            elif intent["verb"] == "rest":
+                msg, consumed = handle_rest(world, intent)
+                outputs.append(msg)
+                if consumed:
+                    any_consumed = True
             else:
                 outputs.append("Not implemented.")
             continue
@@ -2442,6 +2511,7 @@ def process_input(
                     "chain_coif" in world.player.worn_armour,
                     "kite_shield" in world.player.worn_armour,
                     _get_jasper_present(world),
+                    wearing_amulet="jeweled_amulet" in world.player.worn_armour,
                 )
                 outputs.append(
                     "The slime golem surges into the room. "
@@ -2472,5 +2542,33 @@ def process_input(
             )
             outputs.extend(troll_msgs)
             TROLL_MEMORY.save()
+
+        # ---- Ring HP regen -------------------------------------------
+        # Any worn item with "hp_regen" in props heals that many HP per
+        # turn (capped at max_hp).  Prints a brief message only when HP
+        # actually increases and the player is not already at max.
+        for eid in world.player.worn_armour:
+            ent = world.entities.get(eid)
+            if not ent:
+                continue
+            regen = ent.props.get("hp_regen", 0)
+            if regen and world.player.hp < world.player.max_hp:
+                world.player.hp = min(world.player.max_hp,
+                                      world.player.hp + regen)
+                # Sync to combat session if active
+                if _COMBAT_SESSION is not None:
+                    _COMBAT_SESSION.player_hp = world.player.hp
+                outputs.append(
+                    f"The {ent.name} pulses warmly. "
+                    f"(HP +{regen})"
+                )
+
+        # ---- Passive stamina recovery --------------------------------
+        # Outside combat, the player recovers a small amount of stamina
+        # each turn.  No message — this is background recovery.
+        PASSIVE_STAMINA = 3
+        if _COMBAT_SESSION is None and world.player.stamina < world.player.max_stamina:
+            world.player.stamina = min(world.player.max_stamina,
+                                       world.player.stamina + PASSIVE_STAMINA)
 
     return "\n".join(outputs), None
