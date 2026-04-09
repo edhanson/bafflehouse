@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from npc_bayesian import BayesianReputation, NPCMemory
+from scoring import TRACKER as SCORE_TRACKER
 
 
 # ── Atmospheric message pools ────────────────────────────────────────────
@@ -392,6 +393,13 @@ def npc_tick(
     # both when the player moves AND when they take in-room actions.
     WANDER_CHANCE_DEVOTED = 0.05
 
+    # Award disposition milestones
+    if npc.npc_id == "jasper":
+        if disposition in ("neutral", "friendly", "devoted"):
+            SCORE_TRACKER.award("jasper_neutral")
+        if disposition == "devoted":
+            SCORE_TRACKER.award("jasper_devoted")
+
     if disposition == "devoted" and npc.defn.follows_when_devoted:
         # Name reveal: fires exactly once the first time the cat becomes devoted
         if not npc.revealed_name and same_room:
@@ -608,6 +616,10 @@ def handle_feed_npc(
 
     memory.record(npc.npc_id, event)
     new_disposition = memory.disposition(npc.npc_id)
+
+    # Award feeding milestone (once only)
+    if npc.npc_id == "jasper" and situation == "fed":
+        SCORE_TRACKER.award("jasper_fed")
 
     msg = get_message(npc.npc_id, situation, new_disposition, display_name=npc.display_name)
     return msg or f"You feed {npc.display_name} {food_ent.name}.", True

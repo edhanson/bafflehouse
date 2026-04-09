@@ -37,6 +37,7 @@ from content import build_demo_world
 from engine import do_look, process_input
 from parser import ParserSystem, normalize
 from savegame import save_exists, read_save_file, load_game, save_summary
+from scoring import TRACKER as SCORE_TRACKER, score_summary
 
 
 # ============================================================
@@ -272,7 +273,6 @@ def main() -> None:
 
     initial_look = do_look(world)
     print_and_log(initial_look, log)
-    print_and_log(initial_look, log)
 
     # ── Game loop ─────────────────────────────────────────────────────────
     player_dead = False
@@ -295,6 +295,7 @@ def main() -> None:
                 from npc import JASPER_EVENTS as _JEV
                 _eng.NPC_MEMORY.register_events("jasper", _JEV)
                 _eng.TROLL_MEMORY.reset()
+                SCORE_TRACKER.reset()
                 world = build_demo_world()
                 pending_clarify = None
                 player_dead = False
@@ -305,6 +306,8 @@ def main() -> None:
                 print_and_log(do_look(world), log)
                 continue
             elif normalised in {"", "quit", "exit"}:
+                summary = score_summary(world.clock.now, outcome="died")
+                print_and_log(summary, log)
                 farewell = "Farewell."
                 print(farewell)
                 log.log_output(farewell)
@@ -318,6 +321,8 @@ def main() -> None:
         try:
             line = input(prompt)
         except (EOFError, KeyboardInterrupt):
+            summary = score_summary(world.clock.now, outcome="quit")
+            print_and_log(summary, log)
             farewell = "Farewell."
             print(f"\n{farewell}")
             log.log_output(f"\n{farewell}")
@@ -331,6 +336,8 @@ def main() -> None:
 
         # ── Meta commands ─────────────────────────────────────────────────
         if normalised in {"quit", "exit"}:
+            summary = score_summary(world.clock.now, outcome="quit")
+            print_and_log(summary, log)
             farewell = "Farewell."
             print(farewell)
             log.log_output(farewell)
@@ -352,6 +359,21 @@ def main() -> None:
         # Check for player death after engine output
         if world.player.hp <= 0:
             player_dead = True
+
+        # Check for game-won condition
+        import engine as _eng_check
+        if _eng_check._GAME_WON:
+            # Win state: wait for Enter to exit
+            try:
+                input(f"\n[{world.clock.now}] > ")
+            except (EOFError, KeyboardInterrupt):
+                pass
+            summary = score_summary(world.clock.now, outcome="won")
+            print_and_log(summary, log)
+            farewell = "Farewell, and well done."
+            print(farewell)
+            log.log_output(farewell)
+            break
 
     log.close()
 

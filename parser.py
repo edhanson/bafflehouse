@@ -413,6 +413,19 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         shape="verb_only",
     ),
 
+    # ENTER — go into or through something (portal, archway, door).
+    "enter": VerbDefinition(
+        verb_id="enter",
+        literal_forms=["enter", "step through", "walk through",
+                       "go through", "pass through", "cross through"],
+        semantic_examples=[
+            "enter the portal",
+            "step through the archway",
+            "go through the gateway",
+        ],
+        shape="verb_obj",
+    ),
+
     # REST — recover stamina (not usable in combat).
     "rest": VerbDefinition(
         verb_id="rest",
@@ -631,6 +644,11 @@ def rewrite_movement_idioms(text: str) -> str:
         (r"^run\s+(north|south|east|west|up|down)$", r"go \1"),
         (r"^move\s+(north|south|east|west|up|down)$", r"go \1"),
         (r"^move\s+(.+)$",                            r"push \1"),
+        (r"^step\s+through\s+(?:the\s+)?(.+)$",    r"enter \1"),
+        (r"^walk\s+through\s+(?:the\s+)?(.+)$",    r"enter \1"),
+        (r"^go\s+through\s+(?:the\s+)?(.+)$",      r"enter \1"),
+        (r"^pass\s+through\s+(?:the\s+)?(.+)$",    r"enter \1"),
+        (r"^use\s+(?:the\s+)?portal$",               r"enter portal"),
         (r"^go\s+upstairs$",                         r"go up"),
         (r"^go\s+downstairs$",                       r"go down"),
         (r"^climb\s+up$",                            r"go up"),

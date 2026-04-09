@@ -33,6 +33,7 @@ from combat import (
 )
 from npc_bayesian import NPCMemory
 from savegame import save_game
+from scoring import TRACKER as SCORE_TRACKER
 from parser import (
     DIRECTIONS,
     ParserSystem,
@@ -53,6 +54,7 @@ NPC_MEMORY = NPCMemory("./npc_memory.json")
 TROLL_MEMORY    = TrollMemory()
 COMBAT_MEMORY   = CombatMemory()
 _COMBAT_SESSION: Optional[CombatSession] = None
+_GAME_WON: bool = False
 
 # Register Jasper's custom event table before any reputation is loaded.
 from npc import JASPER_EVENTS
@@ -795,22 +797,28 @@ def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
     if obj == "oak_door":
         world.rooms["foyer"].exits["north"] = "hall_1"
         world.rooms["hall_1"].exits["south"] = "foyer"
-        return narrate([
+        base = narrate([
             "The oak door swings open.",
             "The oak door opens with a low groan.",
             "The oak door swings back on its hinges.",
-        ]), True
+        ])
+        pts = SCORE_TRACKER.award("manor_entered")
+        return (base + "\n" + pts) if pts else base, True
 
     if obj == "study_door":
         world.rooms["trophy_room"].exits["south"] = "secret_study"
         world.rooms["secret_study"].exits["north"] = "trophy_room"
-        return narrate([
+        base = narrate([
             "The heavy door swings inward.",
             "The door opens with a reluctant creak.",
             "The door gives way, swinging open.",
-        ]), True
+        ])
+        pts = SCORE_TRACKER.award("secret_study_found")
+        return (base + "\n" + pts) if pts else base, True
 
-    return narrate(["Opened.", "The thing opens.", "With a modest show of cooperation, it opens."]), True
+    pts = SCORE_TRACKER.award("display_case_opened") if obj == "display_case" else None
+    base = narrate(["Opened.", "The thing opens.", "With a modest show of cooperation, it opens."])
+    return (base + "\n" + pts) if pts else base, True
 
 
 def handle_close(world: World, ir: dict) -> Tuple[str, bool]:
@@ -1228,6 +1236,9 @@ def handle_light(world: World, ir: dict) -> Tuple[str, bool]:
     elif remaining <= 3:
         plural = "es" if remaining != 1 else ""
         msg += f" Only {remaining} match{plural} left."
+    pts = SCORE_TRACKER.award("lamp_lit")
+    if pts:
+        msg += "\n" + pts
     return msg, True
 
 
@@ -1350,6 +1361,7 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
         world.rooms["hall_3"].exits["north"]        = "cellar_passage"
         world.rooms["cellar_passage"].exits["north"] = "hall_3"
         world.rooms["cellar"].exits["north"]         = "cellar_passage"
+        SCORE_TRACKER.award("kitchen_reached")  # fires silently; shown at game end
         world.note_ref([obj])
 
         return (
@@ -1434,6 +1446,7 @@ def _apply_liquid_to_vessel(
         source_ent.props["empty"] = True
         move_entity(world, "jeweled_amulet", "stone_basin")
         world.note_ref([vessel_eid, source_eid, "jeweled_amulet"])
+        SCORE_TRACKER.award("basin_activated")
         return (
             "The moment the water touches the basin, the ring on your finger grows warm. "
             "The carved serpents seem to writhe — a trick of the light, surely — and "
@@ -2068,6 +2081,7 @@ def _execute_combat_action(world: World, action: str) -> str:
 
     elif outcome == "golem_dead":
         _COMBAT_SESSION = None
+        SCORE_TRACKER.award("golem_defeated")
         if golem:
             golem.props["alive"] = False
             golem.props["hp"]    = 0
@@ -2174,6 +2188,63 @@ def _move_entity_to(world: World, eid: str, dest: str) -> None:
             world.rooms[dest].entities.append(eid)
 
 
+def _check_archway_activation(world: World) -> Optional[str]:
+    """
+    Check whether the player has arrived at bridge_far_bank with all
+    three magical artifacts.  If so, activate the stone archway and
+    reveal the home portal.  Returns a narrative string if the archway
+    activates, or None if conditions are not met.
+
+    The three artifacts are:
+      - silver_ring   (from the display case, via the basin puzzle)
+      - jeweled_amulet (from the basin, via ring + water)
+      - secret_treasure (from the vault, via defeating the golem)
+    """
+    if world.player.location != "bridge_far_bank":
+        return None
+
+    archway = world.entities.get("stone_archway")
+    if not archway or archway.props.get("active", False):
+        return None  # already active
+
+    all_items = set(world.player.inventory) | set(world.player.worn_armour)
+    required  = {"silver_ring", "jeweled_amulet", "secret_treasure"}
+    if not required.issubset(all_items):
+        return None
+
+    # Activate archway
+    archway.props["active"] = True
+    portal = world.entities.get("home_portal")
+    if portal:
+        portal.location = "bridge_far_bank"
+        room = world.rooms.get("bridge_far_bank")
+        if room and "home_portal" not in room.entities:
+            room.entities.append("home_portal")
+
+    return (
+        "The moment you step into the clearing, the serpent carvings on "
+        "the archway begin to glow. The ring on your finger grows warm — "
+        "the amulet at your chest pulses in answer — and the strange "
+        "metallic object in your pocket vibrates with a low hum.\n\n"
+        "The archway fills with light. A portal opens.\n\n"
+        "Beyond it, unmistakably, is home."
+    )
+
+
+_WIN_NARRATIVE = (
+    "You step through the portal.\n\n"
+    "The light is warm, and for a moment everything is white and "
+    "weightless and perfectly still.\n\n"
+    "Then it passes, and you are somewhere else entirely — somewhere "
+    "familiar, somewhere that smells of coffee and cold air and "
+    "ordinary life. The archway is gone. The manor is gone. "
+    "Whatever the Bafflehouse was, and whatever brought you there, "
+    "it has released you.\n\n"
+    "You are home.\n\n"
+    "[ You have won. Press Enter to exit. ]"
+)
+
+
 def handle_rest(world: World, ir: dict) -> Tuple[str, bool]:
     """
     Rest for a turn — recovers a significant amount of stamina.
@@ -2200,6 +2271,41 @@ def handle_rest(world: World, ir: dict) -> Tuple[str, bool]:
         f"You rest briefly. "
         f"(Stamina +{gained})",
     ]), True
+
+
+def handle_enter(world: World, ir: dict) -> Tuple[str, bool]:
+    """
+    Enter a location or object: "enter portal", "go through archway", etc.
+    Routes to win condition when the portal is entered.
+    """
+    obj = ir.get("obj") or ir.get("iobj")
+
+    # Portal win condition
+    portal    = world.entities.get("home_portal")
+    portal_in_room = (
+        portal and portal.location == world.player.location
+    )
+    archway = world.entities.get("stone_archway")
+    archway_active = archway and archway.props.get("active", False)
+    archway_here   = archway and archway.location == world.player.location
+
+    target_is_portal = obj in (
+        "home_portal", "portal", "shimmer", "light", "opening",
+        "stone_archway", "archway", "arch", "gateway", "way home",
+    )
+
+    if (portal_in_room or (archway_here and archway_active)) and target_is_portal:
+        global _GAME_WON
+        _GAME_WON = True
+        SCORE_TRACKER.award("game_won")
+        return _WIN_NARRATIVE, True
+
+    # Not a portal — give a gentle redirect
+    if obj:
+        ent = world.entities.get(obj)
+        name = ent.name if ent else str(obj)
+        return f"You can't enter {name}.", False
+    return "Enter what?", False
 
 
 def handle_save(world: World, ir: dict) -> Tuple[str, bool]:
@@ -2233,6 +2339,7 @@ def handle_answer(world: World, ir: dict) -> Tuple[str, bool]:
     # Open bridge east exit the moment the last riddle is answered correctly.
     if state.bridge_open and "east" not in world.rooms["bridge"].exits:
         world.rooms["bridge"].exits["east"] = "bridge_far_bank"
+        SCORE_TRACKER.award("troll_solved")
         # Also open the vault in the cellar and reveal the vault door
         if "south" not in world.rooms["cellar"].exits:
             world.rooms["cellar"].exits["south"] = "vault"
@@ -2282,6 +2389,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "block":      handle_block,
     "save":       handle_save,
     "rest":       handle_rest,
+    "enter":      handle_enter,
 }
 
 
@@ -2486,6 +2594,12 @@ def process_input(
             if world.player.location != location_before:
                 player_moved    = True
                 location_before = world.player.location
+
+    # ---- Archway activation check ----
+    if any_consumed and player_moved:
+        arch_msg = _check_archway_activation(world)
+        if arch_msg:
+            outputs.append(arch_msg)
 
     # ---- Golem tick: wander, detect, pursue ----
     if any_consumed:

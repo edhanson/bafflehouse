@@ -269,14 +269,14 @@ def build_demo_world() -> World:
             rid="bridge_far_bank",
             title="Far Bank",
             desc=(
-                "You cross to the far bank. The mist closes in behind you almost "
-                "immediately, and the world beyond the bridge feels different — "
-                "quieter, older, and somehow further from the manor than the "
-                "distance warrants. A dense wall of vegetation blocks further "
-                "progress. The bridge lies back to the west."
+                "The far bank is a clearing hemmed in by ancient trees, their "
+                "roots breaking through dark soil. The mist that hangs over the "
+                "stream does not penetrate here — the air is preternaturally still. "
+                "At the centre of the clearing stands a stone archway, freestanding "
+                "and clearly not of recent construction. The bridge lies back to "
+                "the west."
             ),
             exits={"west": "bridge"}
-            # NOTE: further exits to be added in future content expansion.
         ),
 
         # ── FOREST MAZE ───────────────────────────────────────────────────
@@ -468,7 +468,7 @@ def build_demo_world() -> World:
             props={
                 "desc": "A small wooden box with a hinged lid. Something rattles faintly inside.",
                 "desc_empty": "A small wooden box with a hinged lid, now empty.",
-                "desc_closed_empty": "A small wooden box with a hinged lid. It is closed and feels light — nothing inside.",
+                "desc_closed_empty": "A small wooden box with a hinged lid. It feels light — nothing inside.",
                 "open": False
             },
             location="foyer"
@@ -1305,6 +1305,56 @@ def build_demo_world() -> World:
                 "inadvisable, though you cannot say exactly why."
             )},
             location="bridge"
+        ),
+
+        # ======================================================
+        # BRIDGE FAR BANK ENTITIES  (end-game)
+        # ======================================================
+
+        "stone_archway": Entity(
+            eid="stone_archway",
+            name="a stone archway",
+            aliases=["archway", "stone archway", "arch", "stone arch",
+                     "ancient archway", "old archway", "carved archway",
+                     "inscription", "carved inscription"],
+            tags={"scenery", "readable"},
+            props={
+                "desc": (
+                    "A freestanding archway of dark stone, each block fitted "
+                    "without mortar to its neighbour. Serpent carvings wind up "
+                    "both pillars and meet at the keystone. The opening frames "
+                    "nothing but the far trees. An inscription is carved into "
+                    "the lintel."
+                ),
+                "desc_active": (
+                    "The archway pulses with soft light, the serpent carvings "
+                    "tracing lines of cold fire up both pillars. Where the opening "
+                    "once showed only trees, there is now something else entirely — "
+                    "a shimmering portal, and beyond it, unmistakably, home."
+                ),
+                "readable_text": (
+                    "The inscription reads, in plain and careful letters:\n\n"
+                    "\"Bring the three magical artifacts to open the way home.\""
+                ),
+                "active": False,
+            },
+            location="bridge_far_bank"
+        ),
+
+        "home_portal": Entity(
+            eid="home_portal",
+            name="the portal",
+            aliases=["portal", "shimmer", "shimmering portal", "gateway",
+                     "home", "way home", "opening", "light"],
+            tags={"scenery"},
+            props={
+                "desc": (
+                    "The portal shimmers with quiet light. Beyond it you can see "
+                    "something familiar — warmth, comfort, a world that makes sense. "
+                    "It will not stay open forever."
+                ),
+            },
+            location="hidden"
         ),
 
         # ======================================================
