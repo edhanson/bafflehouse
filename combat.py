@@ -221,6 +221,21 @@ class CombatSession:
     def coif_reduction(self) -> float:
         return ARMOUR_STATS["chain_coif"]["damage_reduction"] if self.wearing_coif else 0.0
 
+    def _action_cost(self, base_cost: int) -> int:
+        """Total stamina cost including armour penalty."""
+        return base_cost + self.armour_penalty()
+
+    def can_attack(self) -> bool:
+        """True if the player has enough stamina for a normal attack."""
+        weapon = WEAPON_STATS.get(self.weapon_id, WEAPON_STATS["bare_hands"])
+        return self.player_stamina >= self._action_cost(weapon["stamina_cost"])
+
+    def can_heavy_attack(self) -> bool:
+        """True if the player has enough stamina for a heavy attack."""
+        weapon = WEAPON_STATS.get(self.weapon_id, WEAPON_STATS["bare_hands"])
+        cost = weapon["stamina_cost"] + weapon["heavy_cost"]
+        return self.player_stamina >= self._action_cost(cost)
+
     def update_jasper(self, present: bool) -> None:
         """Update Jasper's presence — checked each round, not just at start."""
         if present and not self.jasper_present:
@@ -660,12 +675,10 @@ def resolve_exchange(
         reward += REWARDS["hit_received"]
 
     elif golem_action == "defensive":
-        # The golem braces — only narratively relevant when the player
-        # actually attacks into it.  For dodge, block, taunt, flee, etc.
-        # the brace is silent: the player isn't swinging, so there's
-        # nothing to transmit.
-        if player_action in ("attack", "heavy_attack"):
-            lines.append(_pick(_GOLEM_DEFENSIVE))
+        # The golem braces — narratively handled in the player attack branches
+        # above for "attack" and "heavy_attack".  For dodge, block, taunt,
+        # flee, etc. the brace is silent: the player isn't swinging.
+        pass
 
     elif golem_action == "feint":
         dmg_range = GOLEM_DAMAGE["feint"]
@@ -726,14 +739,28 @@ def _combat_prompt(session: CombatSession) -> str:
     st  = session.player_stamina
     ghp = session.golem_hp
 
-    exhausted = session.stamina_exhausted()
     shield_str = " / block" if session.wearing_shield else ""
+    can_atk   = session.can_attack()
+    can_heavy = session.can_heavy_attack()
 
-    if exhausted:
-        actions = "dodge" + shield_str + " / flee / taunt"
+    # Build the action list based on what stamina allows
+    action_parts = []
+    if can_atk:
+        action_parts.append("attack")
+    if can_heavy:
+        action_parts.append("heavy attack")
+    action_parts.append("dodge" + shield_str)
+    action_parts.append("flee")
+    action_parts.append("taunt")
+    if can_atk:
+        action_parts.append("use item")
+    actions = " / ".join(action_parts)
+
+    if not can_atk:
         note = " [exhausted — offensive actions unavailable]"
+    elif not can_heavy:
+        note = " [low stamina — heavy attack unavailable]"
     else:
-        actions = "attack / heavy attack / dodge" + shield_str + " / flee / taunt / use item"
         note = ""
 
     warning = ""
@@ -822,8 +849,10 @@ def process_player_combat_action(
     if player_action is None:
         return f"In combat, your options are limited. {_combat_prompt(session)}", "invalid"
 
-    # Stamina gate
-    if session.stamina_exhausted() and player_action in ("attack", "heavy_attack"):
+    # Stamina gate — each action requires enough stamina to cover its cost.
+    if player_action == "attack" and not session.can_attack():
+        return _pick(_EXHAUSTED) + "\n\n" + _combat_prompt(session), "invalid"
+    if player_action == "heavy_attack" and not session.can_heavy_attack():
         return _pick(_EXHAUSTED) + "\n\n" + _combat_prompt(session), "invalid"
 
     # Choose golem action via Q-learner using minimum-floor blended
