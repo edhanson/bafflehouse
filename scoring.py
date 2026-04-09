@@ -12,7 +12,7 @@
 # Milestone ids are stable strings used throughout engine.py.  The tracker
 # is a module-level singleton reset on each new game.
 #
-# Maximum score: 195 points.
+# Maximum score: 190 points.
 
 from __future__ import annotations
 
@@ -31,7 +31,6 @@ MILESTONES: Dict[str, Tuple[int, str]] = {
     "golem_defeated":      (30,  "Defeated the slime golem"),
 
     # ── Exploration ───────────────────────────────────────────────────────
-    "manor_entered":       ( 5,  "Entered the manor"),
     "secret_study_found":  (10,  "Discovered the secret study"),
 
     # ── Relationship ──────────────────────────────────────────────────────
@@ -74,7 +73,7 @@ class ScoringTracker:
 
         points, desc = MILESTONES[milestone_id]
         self._achieved[milestone_id] = points
-        return f"[+{points}] {desc}"
+        return f"[+{points} points] {desc}"
 
     def score(self) -> int:
         """Return the current total score."""

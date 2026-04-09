@@ -797,13 +797,11 @@ def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
     if obj == "oak_door":
         world.rooms["foyer"].exits["north"] = "hall_1"
         world.rooms["hall_1"].exits["south"] = "foyer"
-        base = narrate([
+        return narrate([
             "The oak door swings open.",
             "The oak door opens with a low groan.",
             "The oak door swings back on its hinges.",
-        ])
-        pts = SCORE_TRACKER.award("manor_entered")
-        return (base + "\n" + pts) if pts else base, True
+        ]), True
 
     if obj == "study_door":
         world.rooms["trophy_room"].exits["south"] = "secret_study"
