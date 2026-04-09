@@ -276,45 +276,34 @@ def main() -> None:
 
     # ── Game loop ─────────────────────────────────────────────────────────
     player_dead = False
+    game_won    = False
 
     while True:
+        # ── Win state ────────────────────────────────────────────────────
+        if game_won:
+            try:
+                input("\n[ Press Enter to exit. ] ")
+            except (EOFError, KeyboardInterrupt):
+                pass
+            summary = score_summary(world.clock.now, outcome="won")
+            print_and_log(summary, log)
+            farewell = "Farewell, and well done."
+            print(farewell)
+            log.log_output(farewell)
+            break
+
         # ── Dead state ───────────────────────────────────────────────────
         if player_dead or world.player.hp <= 0:
             try:
-                line = input(f"\n[{world.clock.now}] > ")
+                input(f"\n[ Press Enter to exit. ] ")
             except (EOFError, KeyboardInterrupt):
-                break
-            normalised = normalize(line)
-            if normalised == "restart":
-                # Full restart — rebuild world and reset engine state
-                import engine as _eng
-                import pathlib as _pl
-                _eng._COMBAT_SESSION = None
-                _eng._NPC_INSTANCES.clear()
-                _eng.NPC_MEMORY._store.clear()
-                from npc import JASPER_EVENTS as _JEV
-                _eng.NPC_MEMORY.register_events("jasper", _JEV)
-                _eng.TROLL_MEMORY.reset()
-                SCORE_TRACKER.reset()
-                world = build_demo_world()
-                pending_clarify = None
-                player_dead = False
-                random.seed(seed)
-                print()
-                msg = "Restarting session...\n"
-                print_and_log(msg, log)
-                print_and_log(do_look(world), log)
-                continue
-            elif normalised in {"", "quit", "exit"}:
-                summary = score_summary(world.clock.now, outcome="died")
-                print_and_log(summary, log)
-                farewell = "Farewell."
-                print(farewell)
-                log.log_output(farewell)
-                break
-            else:
-                print("You are dead. Press Enter to quit, or type RESTART to begin again.")
-            continue
+                pass
+            summary = score_summary(world.clock.now, outcome="died")
+            print_and_log(summary, log)
+            farewell = "Farewell."
+            print(farewell)
+            log.log_output(farewell)
+            break
 
         prompt = f"\n[{world.clock.now}] > "
 
@@ -363,17 +352,7 @@ def main() -> None:
         # Check for game-won condition
         import engine as _eng_check
         if _eng_check._GAME_WON:
-            # Win state: wait for Enter to exit
-            try:
-                input(f"\n[{world.clock.now}] > ")
-            except (EOFError, KeyboardInterrupt):
-                pass
-            summary = score_summary(world.clock.now, outcome="won")
-            print_and_log(summary, log)
-            farewell = "Farewell, and well done."
-            print(farewell)
-            log.log_output(farewell)
-            break
+            game_won = True
 
     log.close()
 

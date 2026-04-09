@@ -1028,7 +1028,7 @@ def handle_drink(world: World, ir: dict) -> Tuple[str, bool]:
         if liquid == "water":
             return narrate([
                 "You sip from the clay ewer. The water is stale and stagnant — "
-                "it hasn't moved in years. You gag and stop.",
+                "it hasn't moved in ages. You gag and stop.",
                 "You tip the ewer to your lips. The water tastes of old clay "
                 "and something you'd rather not identify. Not worth it.",
             ]), True
@@ -1118,7 +1118,11 @@ def handle_read(world: World, ir: dict) -> Tuple[str, bool]:
         if eid in world.entities
     )
     if has_lens and "readable_text_magnified" in ent.props:
-        text = ent.props["readable_text_magnified"]
+        text = (
+            "You hold the magnifying glass over the small text. "
+            "The cramped letters resolve into legibility.\n\n"
+            + ent.props["readable_text_magnified"]
+        )
     else:
         text = ent.props.get("readable_text", "")
 
@@ -2633,7 +2637,8 @@ def process_input(
     # ---- NPC tick: runs once per turn after all segments execute ----
     # Only ticks when at least one action was consumed (so meta commands
     # like "look" and "inventory" do not advance NPC state).
-    if any_consumed:
+    # Suppressed after the game is won to avoid post-win noise.
+    if any_consumed and not _GAME_WON:
         npcs = get_npc_instances(world)
         for npc in npcs.values():
             npc_msgs = npc_tick(
@@ -2659,21 +2664,30 @@ def process_input(
         # Any worn item with "hp_regen" in props heals that many HP per
         # turn (capped at max_hp).  Prints a brief message only when HP
         # actually increases and the player is not already at max.
-        for eid in world.player.worn_armour:
-            ent = world.entities.get(eid)
-            if not ent:
-                continue
-            regen = ent.props.get("hp_regen", 0)
-            if regen and world.player.hp < world.player.max_hp:
-                world.player.hp = min(world.player.max_hp,
-                                      world.player.hp + regen)
-                # Sync to combat session if active
-                if _COMBAT_SESSION is not None:
-                    _COMBAT_SESSION.player_hp = world.player.hp
-                outputs.append(
-                    f"The {ent.name} pulses warmly. "
-                    f"(HP +{regen})"
-                )
+        # Skip if the game has just been won (avoid post-win tick noise).
+        if not _GAME_WON:
+            for eid in world.player.worn_armour:
+                ent = world.entities.get(eid)
+                if not ent:
+                    continue
+                regen = ent.props.get("hp_regen", 0)
+                if regen and world.player.hp < world.player.max_hp:
+                    world.player.hp = min(world.player.max_hp,
+                                          world.player.hp + regen)
+                    # Sync to combat session if active
+                    if _COMBAT_SESSION is not None:
+                        _COMBAT_SESSION.player_hp = world.player.hp
+                    # Strip leading article for grammatical display name
+                    display = ent.name
+                    for article in ("a ", "an ", "the "):
+                        if display.lower().startswith(article):
+                            display = display[len(article):]
+                            break
+                    display = display.capitalize()
+                    outputs.append(
+                        f"{display} pulses warmly. "
+                        f"(HP +{regen})"
+                    )
 
         # ---- Passive stamina recovery --------------------------------
         # Outside combat, the player recovers a small amount of stamina
