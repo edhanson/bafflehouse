@@ -402,8 +402,8 @@ def test_puzzles() -> Suite:
             w.entities["matchbox"].props["matches_remaining"] == 9)
 
     cmd(w, "pull lever")
-    s.check("puzzle 1: hall_3 north passage opened",
-            w.rooms["hall_3"].exits.get("north") == "cellar_passage")
+    s.check("puzzle 1: hall_3 down passage opened",
+            w.rooms["hall_3"].exits.get("down") == "cellar_passage")
 
     # Puzzle 2: journal -> antler -> display key -> case
     w = fresh()
@@ -994,8 +994,8 @@ def test_map_expansion() -> Suite:
     cmd(w, "fill lamp with oil")
     cmd(w, "light lamp")
     cmd(w, "pull lever")
-    s.check("lever opens hall_3 north passage",
-            w.rooms["hall_3"].exits.get("north") == "cellar_passage")
+    s.check("lever opens hall_3 down passage",
+            w.rooms["hall_3"].exits.get("down") == "cellar_passage")
 
     # ── Weapons and armor in trophy room ─────────────────────
     w = fresh()

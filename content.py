@@ -98,10 +98,10 @@ def build_demo_world() -> World:
                 "portraits have given way to mounted weapons and shields. A heavy door "
                 "to the west stands open into the trophy room. "
                 "A section of the north wall looks subtly different from the rest — "
-                "the stonework is newer, as if something was once bricked over."
+                "the stonework is newer, as if a staircase was once bricked over."
             ),
             exits={"south": "hall_2", "west": "trophy_room"}
-            # NOTE: "north" to cellar passage added dynamically by lever puzzle.
+            # NOTE: "down" to cellar passage added dynamically by lever puzzle.
         ),
 
         # --- New rooms ---
@@ -371,8 +371,8 @@ def build_demo_world() -> World:
                 "A low stone passage smelling of damp and old wood. "
                 "Steps to the south descend to the wine cellar. "
                 "A low doorway to the west opens onto what was once the kitchen. "
-                "A bricked-over arch in the north wall hints at a former connection "
-                "to the hall above."
+                "A bricked-over arch above hints at a former staircase "
+                "connection to the hall above."
             ),
             exits={"south": "cellar", "west": "kitchen"}
             # NOTE: "north" to hall_3 added dynamically by lever puzzle.

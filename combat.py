@@ -379,8 +379,7 @@ _GOLEM_DEATH = (
 _PLAYER_DEATH = (
     "The last impact sends you to the floor. The golem stands over you, "
     "its mass settling. The ceiling above looks very far away.\n\n"
-    "You are dead.\n\n"
-    "[ Press Enter to quit, or type RESTART to begin again. ]"
+    "You are dead."
 )
 _FLEE_SUCCESS = (
     "You make it out. The golem does not immediately follow — "

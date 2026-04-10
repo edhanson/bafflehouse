@@ -271,6 +271,18 @@ def main() -> None:
         else:
             print("  Save file found but could not be read. Starting fresh.\n")
 
+    intro = (
+        "You wake on the cold stone floor of an unfamiliar foyer. "
+        "Your head aches. The last thing you remember is the road, "
+        "the storm, and a light in a window that seemed closer than it was.\n\n"
+        "You do not know how long you have been here. "
+        "You do not know whose house this is. "
+        "What you do know is that the front door behind you will not open "
+        "from the inside, and the air has the particular stillness of a place "
+        "that has been waiting for something."
+    )
+    print_and_log(intro, log)
+    print_and_log("", log)  # blank line between intro and room description
     initial_look = do_look(world)
     print_and_log(initial_look, log)
 

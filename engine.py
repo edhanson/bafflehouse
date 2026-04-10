@@ -1392,8 +1392,8 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
         # Open the passage: add "west" exit to the hall, and a reciprocal
         # "east" exit would lead back to the cellar top, but we instead route
         # it back to the cellar for simplicity (the foyer route still works).
-        world.rooms["hall_3"].exits["north"]        = "cellar_passage"
-        world.rooms["cellar_passage"].exits["north"] = "hall_3"
+        world.rooms["hall_3"].exits["down"]          = "cellar_passage"
+        world.rooms["cellar_passage"].exits["up"]    = "hall_3"
         world.rooms["cellar"].exits["north"]         = "cellar_passage"
         SCORE_TRACKER.award("kitchen_reached")  # fires silently; shown at game end
         world.note_ref([obj])
@@ -2482,6 +2482,13 @@ def handle_answer(world: World, ir: dict) -> Tuple[str, bool]:
             vault_door.location = "cellar"
             if "vault_door" not in world.rooms["cellar"].entities:
                 world.rooms["cellar"].entities.append("vault_door")
+        # Append golem release message to troll response
+        response = (
+            response
+            + "\n\nFrom somewhere deep in the manor you hear a heavy crashing "
+            + "sound, followed by an eerie silence. An overwhelming sense of "
+            + "dread settles over you."
+        )
 
     TROLL_MEMORY.save()
     return response, True
