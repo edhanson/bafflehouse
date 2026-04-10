@@ -8,11 +8,8 @@
 #
 # Semantic parser (optional — required for Section 7 tests and for
 # richer entity grounding in the running game):
---index-url https://download.pytorch.org/whl/cpu
+# CPU-only torch build to avoid the 2GB CUDA wheel.
+torch --index-url https://download.pytorch.org/whl/cpu
+
+# Pulls in transformers, huggingface_hub, etc. from PyPI.
 sentence-transformers>=2.2.0
-#
-# sentence-transformers pulls in torch, transformers, and huggingface_hub
-# automatically.  If you want a CPU-only torch build to save disk space:
-#   pip install torch --index-url https://download.pytorch.org/whl/cpu
-#   pip install sentence-transformers
- 
