@@ -368,6 +368,20 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
         shape="verb_obj",
     ),
 
+    # SAY — speaking to NPCs or into the environment.
+    # Routes to call for NPC interaction; generic for everything else.
+    "say": VerbDefinition(
+        verb_id="say",
+        literal_forms=["say", "speak", "whisper", "mutter", "yell",
+                       "shout", "cry", "call out"],
+        semantic_examples=[
+            "say something to the cat",
+            "speak to the creature",
+            "whisper a greeting",
+        ],
+        shape="verb_obj",
+    ),
+
     "call": VerbDefinition(
         verb_id="call",
         literal_forms=["call", "call to", "call out", "speak to",
@@ -383,7 +397,7 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
     # Handled specially in engine.py: raw text passed to troll module.
     "answer": VerbDefinition(
         verb_id="answer",
-        literal_forms=["answer", "reply", "respond", "say",
+        literal_forms=["answer", "reply", "respond",
                        "the answer is", "my answer is"],
         semantic_examples=[
             "answer the riddle",
@@ -790,6 +804,25 @@ def rewrite_interaction_idioms(text: str) -> str:
         (r"^take\s+a\s+drink\s+of\s+(.+)$",   r"drink \1"),
         (r"^drink\s+from\s+(.+)$",               r"drink \1"),
         (r"^sip\s+from\s+(.+)$",                 r"drink \1"),
+        # Vague take: "grab/take things off X" → "look in X"
+        (r"^(?:grab|take|get)\s+(?:things?|stuff|items?|everything)\s+(?:off|from|out of|off of)\s+(.+)$", r"look in \1"),
+        # Feed shorthand: "feed cat catnip" / "give cat food" → "feed catnip to cat"
+        # Handles recipient-first phrasing without a preposition.
+        # Only rewrite when no preposition follows the recipient name.
+        (r"^feed\s+(cat|jasper|troll)\s+(?!(?:with|to)\b)(.+)$",  r"feed \2 to \1"),
+        (r"^give\s+(cat|jasper|troll)\s+(?!(?:with|to)\b)(.+)$",  r"feed \2 to \1"),
+        # Approach → examine (most natural IF response)
+        (r"^approach\s+(.+)$",                    r"examine \1"),
+        (r"^walk\s+(?:up\s+to|toward|towards)\s+(.+)$", r"examine \1"),
+        (r"^move\s+(?:toward|towards)\s+(.+)$",  r"examine \1"),
+        # Leave/exit room → go (no direction = ask which way)
+        (r"^leave\s+(?:the\s+)?(?:room|area|here)$", r"go"),
+        (r"^exit\s+(?:the\s+)?(?:room|area|here)$", r"go"),
+        (r"^leave$",                               r"go"),
+        # Say/psspss → call (NPC interaction)
+        (r"^(?:say|call)\s+(.+?)\s+(?:to|at)\s+(.+)$", r"call \2"),
+        (r"^pss+\s*(.*)$",                        r"call cat"),
+        (r"^(?:here\s+)?kitty\s*(?:kitty)?$",    r"call cat"),
         (r"^take\s+a\s+bite\s+of\s+(.+)$",    r"eat \1"),
         (r"^take\s+a\s+taste\s+of\s+(.+)$",   r"eat \1"),
 
@@ -1121,7 +1154,6 @@ _VERB_SYNONYMS: Dict[str, str] = {
     "discard":     "drop",
     "chuck":       "drop",
     "ditch":       "drop",
-    "leave":       "drop",
     "abandon":     "drop",
     "release":     "drop",
     "set down":    "drop",
@@ -1363,7 +1395,9 @@ _VERB_SYNONYMS: Dict[str, str] = {
 
     # offer-family
     "show":         "offer",
-    "wave":         "offer",
+    "wave":         "call",
+    "wave at":      "call",
+    "wave to":      "call",
     "dangle":       "offer",
 
     # drink-family
@@ -2118,6 +2152,17 @@ def ground_intent(
 
     grounded_obj, clar1 = ground_slot("obj")
     if clar1:
+        # Before asking the player to disambiguate obj, check that iobj
+        # (the target/instrument) is itself resolvable.  If it isn't,
+        # there is no point disambiguating obj — the action will fail on
+        # iobj regardless.  Return the intent as-is and let the handler
+        # produce the failure naturally on the unresolvable slot.
+        iobj_phrase = pending.get("iobj")
+        if iobj_phrase:
+            iobj_matches, _ = ground_slot("iobj")
+            if not iobj_matches:
+                # iobj unresolvable — skip clarification, leave obj raw
+                return pending
         return clar1
     if grounded_obj:
         pending["obj"] = grounded_obj

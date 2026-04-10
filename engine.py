@@ -464,6 +464,14 @@ def handle_go(world: World, ir: dict) -> Tuple[str, bool]:
     """Move the player in a compass direction or through a named door."""
     iobj = ir.get("iobj")
 
+    if not iobj:
+        room = world.room()
+        exits = list(room.exits.keys())
+        if exits:
+            exit_str = ", ".join(exits)
+            return f"Which direction? Available exits: {exit_str}.", False
+        return "There is nowhere obvious to go.", False
+
     if iobj in DIRECTIONS.values():
         direction = iobj
         room = world.room()
@@ -915,7 +923,7 @@ def handle_unlock(world: World, ir: dict) -> Tuple[str, bool]:
         return err, False
 
     if not iobj:
-        return "Unlock it with what?", False
+        return "You need to specify what to unlock it with.", False
     if iobj not in world.entities:
         return f"You aren't holding any {iobj}.", False
     if iobj not in world.player.inventory:
@@ -966,7 +974,7 @@ def handle_lock(world: World, ir: dict) -> Tuple[str, bool]:
         return err, False
 
     if not iobj:
-        return "Lock it with what?", False
+        return "You need to specify what to lock it with.", False
     if iobj not in world.entities:
         return f"You aren't holding any {iobj}.", False
     if iobj not in world.player.inventory:
@@ -1515,7 +1523,7 @@ def handle_fill(world: World, ir: dict) -> Tuple[str, bool]:
         return "You'd need to be holding it to fill it.", False
 
     if not source_eid:
-        return "Fill it with what?", False
+        return "You need to specify what to fill it with.", False
     if source_eid not in world.entities:
         return "You don't have that.", False
 
@@ -1908,6 +1916,30 @@ def handle_offer(world: World, ir: dict) -> tuple:
         return "You don't see that here.", False
 
     return handle_offer_npc(world, npc, NPC_MEMORY, item_eid)
+
+
+def handle_say(world: World, ir: dict) -> tuple:
+    """
+    Say something.  Routes to handle_call for NPC targets.
+    At the bridge, routes to handle_answer so the troll accepts
+    "say map" or "say footsteps" as valid answer phrasings.
+    For non-NPC targets or no target, produces a gentle response.
+    """
+    obj = ir.get("obj")
+
+    # At the bridge, treat "say X" as an answer attempt
+    if world.player.location == "bridge":
+        return handle_answer(world, ir)
+
+    if obj and obj in world.entities:
+        ent = world.entity(obj)
+        if "npc" in ent.tags:
+            return handle_call(world, ir)
+    return narrate([
+        "You speak into the silence. Nothing responds.",
+        "Your words hang in the air and dissolve.",
+        "You say something. The room is not impressed.",
+    ]), True
 
 
 def handle_call(world: World, ir: dict) -> tuple:
@@ -2402,6 +2434,7 @@ ACTION_HANDLERS: Dict[str, Callable[[World, dict], Tuple[str, bool]]] = {
     "feed":       handle_feed,
     "offer":      handle_offer,
     "call":       handle_call,
+    "say":        handle_say,
     "answer":     handle_answer,
     "block":      handle_block,
     "save":       handle_save,

@@ -467,7 +467,7 @@ def build_demo_world() -> World:
             tags={"openable", "container"},
             props={
                 "desc": "A small wooden box with a hinged lid. Something rattles faintly inside.",
-                "desc_empty": "A small wooden box with a hinged lid, now empty.",
+                "desc_empty": "A small wooden box with a hinged lid.",
                 "desc_closed_empty": "A small wooden box with a hinged lid. It feels light — nothing inside.",
                 "open": False
             },
@@ -928,7 +928,9 @@ def build_demo_world() -> World:
             eid="stone_stag",
             name="a stone stag",
             aliases=["stag", "stone stag", "sculpture", "statue",
-                     "antler", "stag antler", "heavy antler"],
+                     "antler", "stag antler", "heavy antler",
+                     "stag head", "deer head", "mounted head",
+                     "deer", "trophy", "animal head"],
             tags={"scenery", "pullable"},
             props={
                 "desc": (
