@@ -37,9 +37,9 @@ PLAYER_ACTIONS = [
     "heavy_attack",  # powerful strike, high stamina cost
     "dodge",         # evasion attempt
     "block",         # shield-based damage reduction
-    "use_item",      # use a held item in combat
     "flee",          # attempt to escape
     "taunt",         # provoke the NPC, stamina-positive
+    "equip",         # player changed weapon or armour mid-combat
 ]
 
 NPC_ACTIONS = [
@@ -86,6 +86,8 @@ class CombatState:
     npc_max_hp:         int
     player_last_action: str
     round_num:          int
+    wearing_coif:       bool = False
+    wearing_shield:     bool = False
 
     def to_key(self) -> tuple:
         return (
@@ -94,6 +96,8 @@ class CombatState:
             PLAYER_ACTIONS.index(self.player_last_action)
                 if self.player_last_action in PLAYER_ACTIONS else 0,
             encode_round(self.round_num),
+            int(self.wearing_coif),
+            int(self.wearing_shield),
         )
 
 

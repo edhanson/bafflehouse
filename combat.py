@@ -250,6 +250,8 @@ class CombatSession:
             npc_max_hp         = self.golem_max_hp,
             player_last_action = self.last_player_action,
             round_num          = self.round_num,
+            wearing_coif       = self.wearing_coif,
+            wearing_shield     = self.wearing_shield,
         )
 
 
@@ -711,6 +713,77 @@ def resolve_exchange(
 
 
 # ── Public interface ──────────────────────────────────────────────────────
+
+def golem_action_round(session: CombatSession, learner: QLearner) -> Tuple[str, str]:
+    """
+    Run the golem's half of a combat round only — used when the player
+    spends their action on an equipment change instead of a combat move.
+
+    The golem chooses and executes its action; the player takes any
+    resulting damage but deals none.  Returns (narrative, outcome) where
+    outcome is "continue", "player_dead", or "fled" (never "golem_dead"
+    since the player dealt no damage).
+    """
+    coif_red      = 0.25 if session.wearing_coif   else 0.0
+    armour_penalty = (3   if session.wearing_coif   else 0) + \
+                     (2   if session.wearing_shield  else 0)
+
+    state    = session.to_combat_state()
+    forbidden = ["pursue"]  # player didn't flee, so pursue is invalid
+    if session.acid_cooldown > 0 or session.acid_total >= session.ACID_MAX_SESSION:
+        forbidden.append("special")
+    if session.acid_cooldown > 0:
+        session.acid_cooldown -= 1
+
+    golem_action = learner.choose_action(state, forbidden=forbidden)
+
+    # Telegraph heavy_strike one round ahead
+    if golem_action == "heavy_strike" and not session.heavy_strike_warning:
+        session.heavy_strike_warning = True
+        golem_action = "defensive"
+    else:
+        session.heavy_strike_warning = False
+
+    lines: List[str] = []
+    player_dmg = 0
+
+    if golem_action in ("strike", "heavy_strike", "pursue"):
+        dmg_range = GOLEM_DAMAGE[golem_action]
+        raw_dmg   = _roll(dmg_range)
+        final_dmg = int(raw_dmg * (1.0 - coif_red))
+        if golem_action == "heavy_strike":
+            lines.append(_pick(_GOLEM_HEAVY_STRIKES))
+        else:
+            lines.append(_pick(_GOLEM_STRIKES))
+        lines.append(f"You take {final_dmg} damage.")
+        player_dmg = final_dmg
+    elif golem_action == "feint":
+        raw_dmg   = _roll(GOLEM_DAMAGE["feint"])
+        final_dmg = int(raw_dmg * (1.0 - coif_red))
+        lines.append(_pick(_GOLEM_FEINT))
+        lines.append(f"You take {final_dmg} damage.")
+        player_dmg = final_dmg
+    elif golem_action == "special":
+        raw_dmg = _roll(GOLEM_DAMAGE["special"])
+        lines.append(_pick(_GOLEM_SPECIAL))
+        lines.append(f"You take {raw_dmg} damage from the acid.")
+        player_dmg = raw_dmg
+        session.acid_total    += 1
+        session.acid_cooldown  = random.randint(3, 4)
+    elif golem_action == "defensive":
+        lines.append(_pick(_GOLEM_DEFENSIVE))
+
+    session.player_hp  = max(0, session.player_hp  - player_dmg)
+    session.round_num += 1
+
+    # Q-update: reward for hitting an undefended player
+    reward = REWARDS["hit_received"] * (-1) if player_dmg > 0 else 0.0
+    next_state = session.to_combat_state()
+    learner.update(state, golem_action, reward, next_state)
+
+    outcome = "player_dead" if session.player_hp <= 0 else "continue"
+    return "\n".join(lines), outcome
+
 
 def start_combat(
     session: CombatSession,

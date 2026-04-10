@@ -29,7 +29,7 @@ from troll import (
 from npc_qlearning import CombatMemory
 from combat import (
     CombatSession, start_combat, process_player_combat_action,
-    combat_status, WEAPON_STATS,
+    combat_status, WEAPON_STATS, golem_action_round, _combat_prompt,
 )
 from npc_bayesian import NPCMemory
 from savegame import save_game
@@ -2633,6 +2633,7 @@ def process_input(
         return out, None
 
     # ---- Combat intercept: if in combat, all input routes to combat ----
+    _equip_round = False   # set True when player changes equipment in combat
     if _COMBAT_SESSION is not None:
         normalised_input = normalize(text)
         if normalised_input in {"look", "l", "inventory", "inv", "i"}:
@@ -2645,10 +2646,10 @@ def process_input(
             return do_status(world), None
         elif any(normalised_input.startswith(v) for v in
                  ("wield ", "wear ", "remove ", "take off ", "unequip ")):
-            # Equipment changes allowed during combat.
-            # Fall through to normal parsing below; after execution,
-            # sync the updated weapon/armour to the combat session.
-            pass
+            # Equipment changes cost a combat round — fall through to normal
+            # parsing below, then fire a golem-only action afterwards.
+            # The _equip_round flag is checked after the segment loop.
+            _equip_round = True
         else:
             narrative = _execute_combat_action(world, normalised_input)
             world.clock.advance(1)
@@ -2743,6 +2744,32 @@ def process_input(
         _COMBAT_SESSION.wearing_coif   = "chain_coif"     in world.player.worn_armour
         _COMBAT_SESSION.wearing_shield = "kite_shield"    in world.player.worn_armour
         _COMBAT_SESSION.wearing_amulet = "jeweled_amulet" in world.player.worn_armour
+
+    # ---- Golem action for equipment rounds ──────────────────────────────
+    if _equip_round and _COMBAT_SESSION is not None and any_consumed:
+        _COMBAT_SESSION.update_jasper(_get_jasper_present(world))
+        _COMBAT_SESSION.last_player_action = "equip"  # distinct state for Q-learner
+        learner = COMBAT_MEMORY.learner("slime_golem")
+        golem_narrative, eq_outcome = golem_action_round(_COMBAT_SESSION, learner)
+        world.player.hp = _COMBAT_SESSION.player_hp
+        # Ring regen
+        for eid in world.player.worn_armour:
+            ent = world.entities.get(eid)
+            if ent and ent.props.get("hp_regen", 0) and world.player.hp < world.player.max_hp:
+                world.player.hp = min(world.player.max_hp,
+                                      world.player.hp + ent.props["hp_regen"])
+                _COMBAT_SESSION.player_hp = world.player.hp
+                display = ent.name
+                for article in ("a ", "an ", "the "):
+                    if display.lower().startswith(article):
+                        display = display[len(article):]; break
+                golem_narrative += f"\n{display.capitalize()} pulses warmly. (HP +{ent.props['hp_regen']})"
+        outputs.append(golem_narrative)
+        if eq_outcome == "player_dead":
+            world.player.hp = 0
+            _COMBAT_SESSION = None
+        elif _COMBAT_SESSION is not None:
+            outputs.append(_combat_prompt(_COMBAT_SESSION))
 
     # ---- Archway activation check ----
     if any_consumed and player_moved:
