@@ -909,7 +909,7 @@ def build_demo_world() -> World:
         "weapon_rack": Entity(
             eid="weapon_rack",
             name="the weapon rack",
-            aliases=["rack", "weapon rack", "mount", "wall mount", "display"],
+            aliases=["rack", "weapon rack", "display"],
             tags={"scenery"},
             props={
                 "desc": (

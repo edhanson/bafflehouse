@@ -455,7 +455,8 @@ VERB_DEFS: Dict[str, VerbDefinition] = {
             "kick something",
             "hit an enemy",
         ],
-        shape="verb_obj",
+        shape="verb_obj_prep_iobj",
+        preferred_preps=["with", "using"],
     ),
 
     # WIELD — placeholder for future combat system.

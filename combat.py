@@ -617,10 +617,6 @@ def resolve_exchange(
             # Return special sentinel reward value to signal flee success
             return "\n".join(lines), 0, 0, float("inf")
 
-    elif player_action == "use_item":
-        # Handled by caller (engine) before this function — placeholder
-        lines.append("You use an item.")
-
     # ── Golem action resolution ───────────────────────────────────────────
     if golem_action == "_miss":
         lines.append("The golem's attack finds nothing.")
@@ -752,8 +748,6 @@ def _combat_prompt(session: CombatSession) -> str:
     action_parts.append("dodge" + shield_str)
     action_parts.append("flee")
     action_parts.append("taunt")
-    if can_atk:
-        action_parts.append("use item")
     actions = " / ".join(action_parts)
 
     if not can_atk:
@@ -818,8 +812,6 @@ def process_player_combat_action(
         "escape":        "flee",
         "taunt":         "taunt",
         "t":             "taunt",
-        "use item":      "use_item",
-        "use":           "use_item",
     }
 
     # Strip target names so "taunt golem", "dodge the creature", etc. work.

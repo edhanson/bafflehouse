@@ -2004,11 +2004,8 @@ def handle_attack(world: World, ir: dict) -> Tuple[str, bool]:
     if "scenery" in ent.tags:
         return f"Attacking {ent.name} accomplishes nothing.", False
 
-    # Non-NPC portable entity — placeholder for future combat
-    return (
-        f"You take a swing at {ent.name}. "
-        "Nothing dramatic happens. (Combat system coming soon.)"
-    ), False
+    # Portable items, weapons, armour — can't be meaningfully attacked
+    return f"You can't attack {ent.name}.", False
 
 
 # ============================================================
@@ -2072,6 +2069,24 @@ def _execute_combat_action(world: World, action: str) -> str:
     # Sync player vitals from session before potentially clearing it
     world.player.hp      = _COMBAT_SESSION.player_hp
     world.player.stamina = _COMBAT_SESSION.player_stamina
+
+    # Ring regen: apply during combat after each non-terminal round
+    if outcome == "continue":
+        for eid in world.player.worn_armour:
+            ent = world.entities.get(eid)
+            if not ent:
+                continue
+            regen = ent.props.get("hp_regen", 0)
+            if regen and world.player.hp < world.player.max_hp:
+                world.player.hp = min(world.player.max_hp,
+                                      world.player.hp + regen)
+                _COMBAT_SESSION.player_hp = world.player.hp
+                display = ent.name
+                for article in ("a ", "an ", "the "):
+                    if display.lower().startswith(article):
+                        display = display[len(article):]
+                        break
+                narrative += f"\n{display.capitalize()} pulses warmly. (HP +{regen})"
 
     # Always write current golem HP back to entity so it persists
     golem = world.entities.get("slime_golem")
@@ -2505,10 +2520,17 @@ def process_input(
         if normalised_input in {"look", "l", "inventory", "inv", "i"}:
             pass   # allow look/inv during combat
         elif normalised_input == "save":
-            # Save is allowed but blocked with a message during combat
             return handle_save(world, {})[0], None
         elif normalised_input in {"rest", "z", "zz", "wait"}:
             return "There is no time to rest.", None
+        elif normalised_input == "status":
+            return do_status(world), None
+        elif any(normalised_input.startswith(v) for v in
+                 ("wield ", "wear ", "remove ", "take off ", "unequip ")):
+            # Equipment changes allowed during combat.
+            # Fall through to normal parsing below; after execution,
+            # sync the updated weapon/armour to the combat session.
+            pass
         else:
             narrative = _execute_combat_action(world, normalised_input)
             world.clock.advance(1)
@@ -2596,6 +2618,13 @@ def process_input(
             if world.player.location != location_before:
                 player_moved    = True
                 location_before = world.player.location
+
+    # ---- Sync equipment to combat session after any equipment change ----
+    if _COMBAT_SESSION is not None and any_consumed:
+        _COMBAT_SESSION.weapon_id      = _get_player_weapon_id(world)
+        _COMBAT_SESSION.wearing_coif   = "chain_coif"     in world.player.worn_armour
+        _COMBAT_SESSION.wearing_shield = "kite_shield"    in world.player.worn_armour
+        _COMBAT_SESSION.wearing_amulet = "jeweled_amulet" in world.player.worn_armour
 
     # ---- Archway activation check ----
     if any_consumed and player_moved:
