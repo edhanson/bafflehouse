@@ -272,14 +272,22 @@ def main() -> None:
             print("  Save file found but could not be read. Starting fresh.\n")
 
     intro = (
-        "You wake on the cold stone floor of an unfamiliar foyer. "
-        "Your head aches. The last thing you remember is the road, "
-        "the storm, and a light in a window that seemed closer than it was.\n\n"
+        "After an exhausting week of too much work, all you wanted was to "
+        "spend a quiet and boring evening at home. But your friends had "
+        "other ideas and talked you into going to see a terrible movie. "
+        "You didn't really want to go see this film, but you decided to "
+        "along in the interest of being social. But the movie was so "
+        "tedious that you couldn't help but fall asleep partway through.\n\n"
+        "You wake alone on the cold stone floor of an unfamiliar foyer. "
+        "Your head aches. The last thing you remember is being seated at"
+        "the theater with your friends, watching that lousy movie. But "
+        "that seems long ago and far away now, and you see no sign of "
+        "your friends.\n\n"
         "You do not know how long you have been here. "
         "You do not know whose house this is. "
-        "What you do know is that the front door behind you will not open "
-        "from the inside, and the air has the particular stillness of a place "
-        "that has been waiting for something."
+        "But you have a sense that you are far from home. The air has "
+        "the particular stillness of a place that has been waiting for "
+        "something. Are you that something? "
     )
     print_and_log(intro, log)
     print_and_log("", log)  # blank line between intro and room description

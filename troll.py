@@ -126,6 +126,17 @@ RIDDLE_BANK: List[TrollRiddle] = [
         accepted=["joke", "a joke", "jokes", "riddle", "a riddle",
                   "jest", "a jest"],
     ),
+    TrollRiddle(
+        rid="r08",
+        text=(
+            "I can clap but I have no hands. "
+            "What am I?"
+        ),
+        answer="thunder",
+        accepted=["thunder", "thunderclap", "thunderstorm", "a thunderclap", 
+                  "a thunderstorm", "thunder clap", "thunder storm", 
+                  "a thunder clap", "a thunder storm"],
+    )
 ]
 
 

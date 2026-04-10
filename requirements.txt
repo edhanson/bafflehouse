@@ -8,6 +8,7 @@
 #
 # Semantic parser (optional — required for Section 7 tests and for
 # richer entity grounding in the running game):
+--index-url https://download.pytorch.org/whl/cpu
 sentence-transformers>=2.2.0
 #
 # sentence-transformers pulls in torch, transformers, and huggingface_hub

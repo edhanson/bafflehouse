@@ -22,7 +22,7 @@
 # ───────
 # Stamina is a secondary resource separate from HP.  It drains with every
 # offensive action and recovers slightly with defensive ones.  When stamina
-# falls below 20 the player's damage output is reduced; hitting 0 means the
+# falls too low, combat actions become unavailable; hitting 0 means the
 # player can only dodge, block, flee, or taunt until they recover.
 
 from __future__ import annotations
@@ -132,8 +132,8 @@ JASPER_COMBAT_OUTCOMES = {
 }
 
 JASPER_HISS_MESSAGES = [
-    "Jasper arches his back, fur standing on end, and lets out a sound like "
-    "a miniature thunderclap. The golem pauses, distracted.",
+    "Jasper arches his back, fur standing on end, and lets out a loud, low, "
+    "rumbling growling sound. The golem pauses, distracted.",
     "Jasper puffs to twice his size and advances on the golem, hissing "
     "with an intensity that seems implausible from something so small.",
     "Jasper's tail goes rigid and he emits a sustained yowl of pure fury. "
@@ -141,20 +141,20 @@ JASPER_HISS_MESSAGES = [
 ]
 JASPER_ATTACK_MESSAGES = [
     "Jasper launches himself at the golem and rakes at its surface with "
-    "both forepaws before rebounding off.",
+    "both forepaws before jumping off.",
     "Jasper bites down hard on what passes for the golem's ankle and twists. "
     "It makes no sound but shudders.",
-    "Jasper streaks low and fast, clawing across the golem's base before "
+    "Jasper strikes low and fast, clawing across the golem's base before "
     "it can react.",
 ]
 JASPER_DODGE_MESSAGES = [
     "The golem swipes at Jasper — but he's already somewhere else.",
     "The golem's limb passes through the space where Jasper was a moment ago.",
-    "Jasper ducks under the blow with uncanny timing.",
+    "Jasper ducks under the strike with uncanny timing.",
 ]
 JASPER_HIT_MESSAGES = [
-    "The golem's limb catches Jasper a glancing blow. He yowls and retreats "
-    "a few steps, shaken.",
+    "The golem's limb catches Jasper with a glancing blow. He yowls and "
+    "retreats a few steps, shaken.",
     "The golem connects. Jasper tumbles sideways and takes a moment to "
     "right himself, eyes wide.",
 ]
@@ -259,8 +259,8 @@ class CombatSession:
 
 _OPENING = [
     (
-        "The golem turns toward you. For a moment it is still — then it lunges, "
-        "and the air fills with the smell of sulphur and hot metal.\n"
+        "The golem turns toward you. It is momentarily still before lunging. "
+        "The air fills with the scent of sulphur and hot metal.\n"
         "Combat has begun."
     ),
     (
@@ -283,7 +283,7 @@ _PLAYER_ATTACKS = {
     "broadsword": [
         "The broadsword bites deep. A chunk of the golem separates briefly "
         "before reabsorbing.",
-        "You bring the blade across in a sweeping arc. It cuts through.",
+        "You bring the blade across in a sweeping arc. It cuts through the golem.",
     ],
     "iron_mace": [
         "The mace connects with a wet, heavy thud. The golem staggers.",
@@ -295,11 +295,11 @@ _PLAYER_HEAVY_ATTACKS = {
     "bare_hands":    ["You throw everything into a desperate lunge."],
     "hunting_knife": ["You drive the knife in with both hands and twist."],
     "broadsword":    ["You wind up and deliver a two-handed blow with full force."],
-    "iron_mace":     ["You raise the mace overhead and bring it down with everything you have."],
+    "iron_mace":     ["You raise the mace and bring it crashing down with everything you have."],
 }
 
 _GOLEM_STRIKES = [
-    "The golem's limb sweeps across — a formless, heavy blow.",
+    "The golem's limb sweeps across, delivering a formless, heavy blow.",
     "It slams a mass of itself toward you with surprising speed.",
     "The golem flows forward and impacts you with its full weight.",
 ]
@@ -309,81 +309,80 @@ _GOLEM_HEAVY_WARNING = [
 ]
 _GOLEM_HEAVY_STRIKES = [
     "It releases everything at once. The impact is massive.",
-    "The golem explodes forward. There is no stopping this one.",
+    "The golem explodes forward. You feel powerless to stop it.",
 ]
 _GOLEM_DEFENSIVE = [
     "The golem pulls its mass inward, becoming dense and compact. "
     "Your attack finds little purchase.",
-    "It hardens — your blow transmits almost nothing.",
+    "It hardens and your blow transmits almost nothing.",
 ]
 _GOLEM_FEINT = [
-    "The golem makes a false motion — you adjust, and that's what it wanted. "
-    "The real strike comes from the other side.",
+    "The golem makes a false motion — you adjust but the real strike"
+    "comes from the other side, blindsiding you.",
     "It feints left. By the time you realise, the impact is already happening.",
 ]
 _GOLEM_SPECIAL = [
-    "The golem opens — briefly — and a spray of something caustic erupts outward. "
+    "The golem briefly opens its mass and a spray of something caustic erupts outward. "
     "It burns where it touches you.",
-    "Acid. You don't see it coming until you feel it.",
+    "The golem sprays acid. You don't see it coming until you feel it.",
 ]
 _GOLEM_PURSUE = [
     "The golem flows after you and catches you on the way out.",
-    "You turn to run — it's already there.",
+    "You turn to run but it's already there.",
 ]
 
 _DODGE_SUCCESS = [
     "You throw yourself aside. The blow passes through where you were.",
-    "You duck and roll. It misses — barely.",
+    "You duck and roll. It barely misses.",
     "You sidestep cleanly.",
 ]
 _DODGE_FAIL_FEINT = [
-    "You dodge — but the feint caught you leaning the wrong way.",
-    "You moved. It was the wrong direction.",
+    "You dodge but the feint caught you leaning the wrong way.",
+    "You moved. But you miscalculated as it was the wrong direction.",
 ]
 _BLOCK_SUCCESS = [
-    "You take the blow on the shield. The impact rattles up your arm but holds.",
+    "You take the blow on the shield. The impact reverberates up your arm but holds.",
     "The shield catches it. Your arm rings but you're intact.",
 ]
 _BLOCK_FAIL_FEINT = [
-    "You raise the shield — the feint goes around it.",
-    "The shield was in the right place. The strike wasn't.",
+    "You raise the shield but the golem's feint goes around it.",
+    "The shield was in the right place but the strike wasn't.",
 ]
 _BLOCK_ACID = [
     "You raise the shield but acid splashes around it.",
-    "The shield stops some of it. Not all.",
+    "The shield stops some of the acid but not all of it.",
 ]
 _TAUNT_MESSAGES = [
     "You shout something deliberately provoking. The golem's posture shifts.",
-    "You gesture dismissively. Somewhere in its mass, something responds to that.",
+    "You gesture dismissively. Somewhere in its mass it seemingly responds.",
 ]
 _FLEE_MESSAGES = [
-    "You back toward the exit and bolt.",
+    "You back away and bolt.",
     "You disengage and run.",
 ]
 _FLEE_CAUGHT = [
     "The golem cuts off your escape. You can't get past it.",
-    "It anticipated the retreat. You're not getting out that way this round.",
+    "It anticipated the retreat. You're not getting out this round.",
 ]
 _EXHAUSTED = [
     "You're too spent for that. You need to recover.",
-    "Your arms won't respond properly. Something less demanding.",
+    "Your arms won't respond due to exhaustion. You need to do something less demanding.",
 ]
 
 _GOLEM_DEATH = (
-    "The golem shudders. Something that might be a sound escapes it — not a "
-    "voice, just a release of pressure — and then it collapses. The form that "
-    "was vaguely humanoid flattens into a spreading pool of dark, iridescent "
-    "fluid. The smell of sulphur lingers.\n\n"
-    "In the centre of the remains, something glitters."
+    "The golem shudders. An unearthly sound escapes from it in a release of pressure "
+    "and then it collapses. Its vaguely humanoid form flattens into a spreading pool "
+    "of dark, iridescent goo. The smell of sulphur lingers in the air.\n\n"
+    "In the center of the remains, something glitters."
 )
 _PLAYER_DEATH = (
     "The last impact sends you to the floor. The golem stands over you, "
-    "its mass settling. The ceiling above looks very far away.\n\n"
+    "seemingly mocking you. The ceiling above looks very far away.\n\n"
     "You are dead."
 )
 _FLEE_SUCCESS = (
-    "You make it out. The golem does not immediately follow — "
-    "but you can hear it behind you, reorienting."
+    "You make it out. The golem does not immediately follow, "
+    "but you can hear it rumbling towards you."
 )
 
 
@@ -452,7 +451,7 @@ def apply_jasper_to_golem_action(
         # Downgrade: heavy_strike → strike, strike → miss, others unchanged
         if golem_action == "heavy_strike":
             golem_action = "strike"
-            extra = " Jasper's assault draws the golem's attention just enough."
+            extra = " Jasper's assault distracts the golem somewhat."
         elif golem_action == "strike":
             golem_action = "_partial"  # sentinel: golem hits at half damage
             extra = " Jasper's interference costs the golem its aim."
@@ -577,7 +576,7 @@ def resolve_exchange(
             # Dodging reduces acid splash damage by half — you get clear but
             # not completely
             lines.append(
-                "You throw yourself aside — the acid spray catches you at "
+                "You throw yourself aside. The acid spray catches you at "
                 "the edge of its arc."
             )
             # Acid damage applied below at half value; mark with sentinel
@@ -585,7 +584,7 @@ def resolve_exchange(
 
     elif player_action == "block":
         if not session.wearing_shield:
-            lines.append("You have no shield to block with.")
+            lines.append("You have no shield with which to block.")
             session.spend_stamina(2)  # wasted action
         else:
             block_cost = ARMOUR_STATS["kite_shield"]["block_cost"] + armour_penalty

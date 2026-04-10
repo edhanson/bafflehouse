@@ -115,7 +115,9 @@ def phrase_in_room_text(world: World, phrase: str) -> bool:
 
     # Collect all visible descriptive text
     texts: list = []
-    if hasattr(room, "desc_lit") and player_has_lit_lamp(world):
+    if getattr(room, "desc_alt", None):
+        texts.append(room.desc_alt)
+    elif hasattr(room, "desc_lit") and player_has_lit_lamp(world):
         texts.append(room.desc_lit)
     else:
         texts.append(room.desc)
@@ -208,7 +210,11 @@ def do_look(world: World, show_npcs: bool = True) -> str:
     room = world.room()
 
     # Select dynamic description if available.
-    if hasattr(room, "desc_lit") and player_has_lit_lamp(world):
+    # desc_alt is set at runtime by event handlers (e.g. lever pulling
+    # unblocks a staircase and updates the room's description).
+    if getattr(room, "desc_alt", None):
+        desc = room.desc_alt
+    elif hasattr(room, "desc_lit") and player_has_lit_lamp(world):
         desc = room.desc_lit
     else:
         desc = room.desc
@@ -620,6 +626,22 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
           and world.rooms.get(world.player.location, None) is not None
           and world.rooms[world.player.location].exits.get("north") == "cellar"):
         desc = ent.props["desc_open"]
+    elif obj == "stone_basin":
+        # State-aware description for the basin
+        if ent.props.get("activated") and "desc_activated" in ent.props:
+            desc = ent.props["desc_activated"]
+        elif ent.props.get("liquid") and "desc_water" in ent.props:
+            desc = ent.props["desc_water"]
+        else:
+            desc = ent.props.get("desc", "You see nothing special.")
+    elif obj == "oil_lamp":
+        # State-aware description for the lamp
+        if ent.props.get("lit") and "desc_lit" in ent.props:
+            desc = ent.props["desc_lit"]
+        elif ent.props.get("fuelled") and "desc_fuelled" in ent.props:
+            desc = ent.props["desc_fuelled"]
+        else:
+            desc = ent.props.get("desc", "You see nothing special.")
     else:
         desc = ent.props.get("desc", "You see nothing special.")
     lines = [desc]
@@ -1396,6 +1418,14 @@ def handle_pull(world: World, ir: dict) -> Tuple[str, bool]:
         world.rooms["cellar_passage"].exits["up"]    = "hall_3"
         world.rooms["cellar"].exits["north"]         = "cellar_passage"
         SCORE_TRACKER.award("kitchen_reached")  # fires silently; shown at game end
+        # Update North Hall description now the staircase is unblocked
+        world.rooms["hall_3"].desc_alt = (
+            "The northernmost reach of the hall. The air here is colder and the "
+            "portraits have given way to mounted weapons and shields. A heavy door "
+            "to the west stands open into the trophy room. "
+            "A narrow stone staircase descends in the north wall — the brickwork "
+            "that once sealed it lies in a heap on the floor."
+        )
         world.note_ref([obj])
 
         return (

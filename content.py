@@ -1,38 +1,10 @@
 # content.py
 #
-# World definition for the manor interactive fiction game.
+# World definition for the Bafflehouse interactive fiction game.
 #
 # This file is the single authoritative source for all rooms, entities, and
 # the starting player state.  The engine and parser never hard-code world
 # knowledge — they operate only on the data structures built here.
-#
-# ROOM MAP (compass directions)
-#
-#         [Secret study]          <- puzzle-gated (iron key)
-#               |  N/S
-#         [Trophy room]           <- new, north of Hall
-#               |  N/S
-#   [Library] - [Hall] -          <- Library new, east of Hall
-#               |  N/S
-#   [Cellar]  - [Foyer]           <- Cellar new, west of Foyer
-#
-# PUZZLE OVERVIEW
-#   Puzzle 0 (warm-up / gate):
-#     Brass key (foyer) -> unlock oak door (hall) -> enter Hall
-#
-#   Puzzle 1 (Cellar — light + combination):
-#     Fill lamp with oil -> light lamp -> explore cellar fully ->
-#     pull lever -> secret passage opens into hall's west wall
-#
-#   Puzzle 2 (Library — read + pull + lock-and-key):
-#     Read journal (library) -> go to trophy room -> pull antler ->
-#     collect display key -> unlock display case (library) ->
-#     take silver ring inside
-#
-#   Puzzle 3 (Secret study — wear + pour + combination):
-#     Iron key (foyer) -> unlock study door (trophy room) ->
-#     wear silver ring -> pour water (ewer, cellar) into stone basin ->
-#     basin reacts, hidden contents revealed
 
 from __future__ import annotations
 from model import Entity, Player, Room, World
@@ -83,9 +55,9 @@ def build_demo_world() -> World:
             rid="hall_2",
             title="Central Hall",
             desc=(
-                "The central stretch of the manor hall. Portraits of stern-faced ancestors "
+                "This is the central stretch of the manor hall. Ancient stern-faced portraits "
                 "line the walls, their painted eyes tracking you with practised disapproval. "
-                "A narrow servants' staircase rises to the upper floor in the corner. "
+                "In the corner, a narrow servants' staircase rises to the upper floor. "
                 "The hall continues north and south."
             ),
             exits={"north": "hall_3", "south": "hall_1", "up": "upstairs_landing"}
@@ -94,11 +66,11 @@ def build_demo_world() -> World:
             rid="hall_3",
             title="North Hall",
             desc=(
-                "The northernmost reach of the hall. The air here is colder and the "
-                "portraits have given way to mounted weapons and shields. A heavy door "
-                "to the west stands open into the trophy room. "
-                "A section of the north wall looks subtly different from the rest — "
-                "the stonework is newer, as if a staircase was once bricked over."
+                "You have reached the northernmost part of the hall. The air here is colder "
+                "and the portraits have given way to decoratively mounted weapons and "
+                "shields. A heavy door to the west stands open into the trophy room. "
+                "A section of the north wall looks subtly different from the rest, with "
+                "newer stonework, as if a staircase was once bricked over."
             ),
             exits={"south": "hall_2", "west": "trophy_room"}
             # NOTE: "down" to cellar passage added dynamically by lever puzzle.
@@ -121,11 +93,11 @@ def build_demo_world() -> World:
             rid="trophy_room",
             title="Trophy Room",
             desc=(
-                "A broad chamber lined with trophies of past hunts and battles. Mounted "
-                "weapons and pieces of armour hang on every wall alongside the animal "
-                "heads. In the centre stands a large stone stag, one antler conspicuously "
-                "heavier than the other. A door to the south is fitted with an iron lock. "
-                "The north hall is to the east."
+                "You stand in a broad chamber lined with trophies of past hunts and battles. "
+                "Mounted weapons and pieces of armour hang on every wall alongside preserved "
+                "animal heads. In the center, a large stone stag stands with one antler "
+                "looking conspicuously heavier than the other. A door to the south is fitted "
+                "with an iron lock. The north hall is to the east."
             ),
             exits={"east": "hall_3"}
             # NOTE: "south" to secret study added dynamically by handle_open(study_door).
@@ -134,10 +106,10 @@ def build_demo_world() -> World:
             rid="secret_study",
             title="Secret Study",
             desc=(
-                "A small, airless room. Shelves of leather-bound ledgers line the walls. "
-                "In the centre, a shallow stone basin sits on a plinth. "
-                "The basin is carved with intertwined serpents and looks very old. "
-                "The door back north leads to the trophy room."
+                "You find yourself in a small room. The air is stale and musty. Shelves of "
+                "leather-bound ledgers line the walls. In the centre, a shallow stone basin "
+                "sits on a pedestal. The basin is carved with intertwined serpents and looks "
+                "very old. The door back north leads to the trophy room."
             ),
             exits={"north": "trophy_room"}
         ),
@@ -145,11 +117,12 @@ def build_demo_world() -> World:
             rid="entryway",
             title="Overgrown Garden",
             desc=(
-                "The manor's former approach garden, now entirely reclaimed by nature. "
-                "Flagstones heave under pressure from roots; ornamental hedges have "
-                "become formless walls of dark green. A rusted iron gate to the west "
-                "leads toward a wooded path. To the east, the old gatehouse is just "
-                "visible through the overgrowth. The manor entrance is back to the north."
+                "This is the manor's former approach garden, now entirely reclaimed by "
+                "nature. Flagstones heave under pressure from roots and the ornamental "
+                "hedges have grown into formless walls of dark green. A rusted iron gate "
+                "to the west leads toward a wooded path. To the east, the old gatehouse "
+                "is just visible through the overgrowth. The manor entrance is back to "
+                "the north."
             ),
             exits={"north": "foyer", "east": "gatehouse", "west": "wooded_path"}
         ),
@@ -169,9 +142,9 @@ def build_demo_world() -> World:
             title="Wooded Path",
             desc=(
                 "A narrow path winds into dense woodland. The trees press close on both "
-                "sides, their branches interlocking overhead. The path continues west "
-                "into deepening shadow. Behind you to the east, the overgrown garden "
-                "is still visible."
+                "sides with their branches interlocking overhead to form a sort of natural "
+                "passageway. The path continues west into deepening shadow. To the east, "
+                "the overgrown garden is still visible."
             ),
             exits={"east": "entryway", "west": "forest_edge"}
         ),
@@ -182,11 +155,11 @@ def build_demo_world() -> World:
             rid="upstairs_landing",
             title="Upper Landing",
             desc=(
-                "A wide landing connecting both staircases. The floorboards "
-                "creak underfoot. Doorways lead east and west into the bedrooms. "
-                "The main staircase descends to the foyer; "
-                "a narrow servants' stair in the south corner drops back down "
-                "to the central hall."
+                "A wide landing connects the upper floor of the manor. The floorboards "
+                "creak underfoot. Doorways lead east and west into the bedrooms. The "
+                "main staircase descends to the foyer while a south passage eventually "
+                "leads to a narrow servants' stair that drops back down to the central "
+                "hall."
             ),
             exits={"down": "foyer", "south": "hall_2",
                    "east": "bedroom_east", "west": "bedroom_west"}
@@ -195,8 +168,8 @@ def build_demo_world() -> World:
             rid="bedroom_east",
             title="East Bedroom",
             desc=(
-                "A modest bedroom, cold and long unslept-in. A brass bed frame "
-                "stands against one wall, its mattress collapsed and mouse-eaten. "
+                "You are in a modest bedroom, cold and long unslept-in. A brass bed "
+                "frame stands against one wall, its mattress collapsed and filthy. "
                 "A nightstand beside the bed still holds a few objects. "
                 "The landing lies to the west."
             ),
@@ -206,10 +179,11 @@ def build_demo_world() -> World:
             rid="bedroom_west",
             title="West Bedroom",
             desc=(
-                "A larger bedroom at the corner of the manor. Mildew has claimed "
-                "most of the wallpaper, leaving dark patches across the plaster. "
-                "A wardrobe stands against the far wall, its door hanging open "
-                "on a broken hinge. The landing lies to the east."
+                "This is a larger bedroom situated at the corner of the manor. "
+                "Mildew has claimed most of the wallpaper, leaving dark patches "
+                "across the plaster. A wardrobe stands against the far wall, "
+                "its door hanging open on a broken hinge. The landing lies to "
+                "the east."
             ),
             exits={"east": "upstairs_landing"}
         ),
@@ -224,7 +198,7 @@ def build_demo_world() -> World:
                 "mechanisms for the portcullis take up one wall. A heavy timber "
                 "shelf along another wall holds various old stores. Arrow slits "
                 "let in thin bars of light. The arched passage leads west back "
-                "toward the garden; the road continues east."
+                "toward the garden and the road continues east."
             ),
             exits={"west": "gatehouse", "east": "cobbled_road"}
         ),
@@ -234,7 +208,7 @@ def build_demo_world() -> World:
             desc=(
                 "The old carriage road stretches east and west, its cobblestones "
                 "heaved and split by decades of neglect. Weeds push through every "
-                "gap. The gatehouse lies to the west; the road disappears into "
+                "gap. The gatehouse lies to the west and the road disappears into "
                 "forest shadow to the east."
             ),
             exits={"west": "gatehouse_interior", "east": "forest_path"}
@@ -244,7 +218,7 @@ def build_demo_world() -> World:
             title="Forest Path",
             desc=(
                 "The cobbled road gives way to a dirt path where the forest closes "
-                "in on both sides. The trees are old and densely planted, blocking "
+                "in on both sides. The trees are old and densely populated, blocking "
                 "most of the sky. The road back west is just visible through the "
                 "trunks. To the east the path descends toward the sound of water."
             ),
@@ -271,10 +245,10 @@ def build_demo_world() -> World:
             desc=(
                 "The far bank is a clearing hemmed in by ancient trees, their "
                 "roots breaking through dark soil. The mist that hangs over the "
-                "stream does not penetrate here — the air is preternaturally still. "
-                "At the centre of the clearing stands a stone archway, freestanding "
-                "and clearly not of recent construction. The bridge lies back to "
-                "the west."
+                "stream does not penetrate here, though the air is preternaturally "
+                "still. At the center of the clearing stands a freestanding stone "
+                "archway that was clearly not constructed recently. The bridge "
+                "lies back to the west."
             ),
             exits={"west": "bridge"}
         ),
@@ -287,7 +261,7 @@ def build_demo_world() -> World:
             title="Forest Edge",
             desc=(
                 "The path from the manor dissolves here into trackless woodland. "
-                "A faint trail is still visible heading east through the trees. "
+                "A faint trail is still visible heading through the trees. "
                 "Behind you to the east, the wooded path back toward the manor "
                 "is just visible."
             ),
@@ -328,7 +302,7 @@ def build_demo_world() -> World:
                 "You are lost in the forest. Your sense of direction has become "
                 "scrambled. The undergrowth is thicker here. Something "
                 "has disturbed the leaf litter recently, but you cannot tell "
-                "what — or from which direction it came."
+                "what or from which direction it came."
             ),
             exits={"north": "forest_a", "south": "forest_d",
                    "east": "forest_d", "west": "forest_b"}
@@ -353,11 +327,11 @@ def build_demo_world() -> World:
             rid="kitchen",
             title="Old Kitchen",
             desc=(
-                "A large stone-flagged kitchen, cold and long disused. A heavy "
-                "iron range squats against the far wall, its grate choked with "
-                "ash. Shelves still hold a scatter of earthenware pots and "
-                "rusted implements. A low doorway to the east leads back to "
-                "the passage."
+                "You enter a large stone-flagged kitchen, cold and long disused. "
+                "A heavy iron range squats against the far wall, its grate choked "
+                "with ash. Shelves still hold a scatter of earthenware pots and "
+                "rusted implements. A low doorway to the east leads back to the "
+                "passage."
             ),
             exits={"east": "cellar_passage"}
         ),
@@ -368,11 +342,10 @@ def build_demo_world() -> World:
             rid="cellar_passage",
             title="Cellar Passage",
             desc=(
-                "A low stone passage smelling of damp and old wood. "
+                "You are in a low stone passage smelling of old, damp wood. "
                 "Steps to the south descend to the wine cellar. "
                 "A low doorway to the west opens onto what was once the kitchen. "
-                "A bricked-over arch above hints at a former staircase "
-                "connection to the hall above."
+                "A brick staircase connects to the hall above."
             ),
             exits={"south": "cellar", "west": "kitchen"}
             # NOTE: "north" to hall_3 added dynamically by lever puzzle.
@@ -384,10 +357,11 @@ def build_demo_world() -> World:
             # desc_dark is used when the player has no lit lamp;
             # desc_lit  is used when they do.
             desc=(
-                "A vaulted cellar. Stone racks hold the dusty ghosts of wine bottles, "
-                "most long since emptied or broken. Without light, the far end of the "
-                "room is impenetrably dark — you can tell something is there but cannot "
-                "make it out. The foyer is back up the stairs to the east."
+                "You stand in a vaulted cellar. Stone racks hold the dusty ghosts "
+                "of wine bottles, most long since emptied or broken. Without light, "
+                "the far end of the room is impenetrably dark — you can tell "
+                "something is there but cannot make it out. The foyer is back up "
+                "the stairs to the east."
             ),
             exits={"east": "foyer"}
             # NOTE: "north" to cellar_passage added dynamically by lever puzzle.
@@ -401,10 +375,10 @@ def build_demo_world() -> World:
             rid="vault",
             title="The Vault",
             desc=(
-                "A low chamber cut from raw stone, clearly not part of the original "
-                "cellar construction. The walls are smooth and faintly warm to the "
-                "touch. A smell like hot iron and something organic hangs in the air. "
-                "Whatever was kept here, it was not wine."
+                "This is a low chamber cut from raw stone, clearly not part of the "
+                "original cellar construction. The walls are smooth and faintly warm "
+                "to the touch. A nauseating smell like hot iron and something organic "
+                "hangs in the air. Whatever was kept here, it was not wine."
             ),
             exits={"north": "cellar"}
         ),
@@ -412,21 +386,15 @@ def build_demo_world() -> World:
 
     # Dynamic room descriptions referenced by do_look() in engine.py.
     # The cellar has two descriptions depending on whether the player
-    # is carrying a lit lamp.
-    rooms["cellar"].desc = (
-        "A vaulted cellar. Stone racks hold the dusty ghosts of wine bottles, "
-        "most long since emptied or broken. Without light, the far end of the "
-        "room is impenetrably dark — you can tell something is there but cannot "
-        "make it out. The foyer is back up the stairs to the east."
-    )
-    # Store the lit description as a room attribute so engine.py can
-    # retrieve it without hard-coding strings outside of content.py.
+    # is carrying a lit lamp. Store the lit description as a room 
+    # attribute so engine.py can retrieve it without hard-coding 
+    # strings outside of content.py.
     rooms["cellar"].desc_lit = (
-        "A vaulted cellar. Stone racks hold the dusty ghosts of wine bottles, "
-        "most long since emptied or broken. By the light of the lamp the far "
-        "end of the room resolves into view: rough stone walls, a few broken "
-        "crates, and what looks like an iron lever set into the far wall. "
-        "The foyer is back up the stairs to the east."
+        "You stand in a vaulted cellar. Stone racks hold the dusty ghosts "
+        "of wine bottles, most long since emptied or broken. By the light of "
+        "the lamp, the far end of the room resolves into view: rough stone "
+        "walls, a few broken crates, and what looks like an iron lever set "
+        "into the far wall. The foyer is back up the stairs to the east."
     )
 
     # ----------------------------------------------------------
@@ -497,7 +465,7 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "A dusty chandelier hangs overhead, affecting grandeur "
-                    "and achieving dust."
+                    "and accumulating dust."
                 )
             },
             location="foyer"
@@ -512,11 +480,11 @@ def build_demo_world() -> World:
             tags={"scenery"},
             props={
                 "desc": (
-                    "Faded oil paintings of men and women on horseback, or standing "
-                    "over fallen stags with satisfied expressions. The paint has "
-                    "darkened with age and the subjects have become difficult to "
-                    "distinguish from one another. Whoever they were, they are "
-                    "long gone."
+                    "Numerous faded oil paintings of men and women on horseback, or "
+                    "standing over fallen stags with satisfied expressions. The "
+                    "paint has darkened with age and the subjects have become "
+                    "difficult to distinguish from one another. Whoever they were, "
+                    "they are long gone."
                 ),
             },
             location="hall_1"
@@ -545,7 +513,7 @@ def build_demo_world() -> World:
             tags={"scenery"},
             props={
                 "desc": (
-                    "Row upon row of stern-faced ancestors rendered in oil. Each "
+                    "Row upon row of stern-faced individuals rendered in oil. Each "
                     "portrait has the same quality of faint disapproval, as though "
                     "the subjects were asked to sit for their likeness and found the "
                     "experience beneath them. Their painted eyes do seem to follow "
@@ -566,9 +534,8 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "Here the portraits have been replaced by displays of weapons "
-                    "and shields — older and more functional-looking than those in "
-                    "the trophy room. Spear hafts, rusted bucklers, a dented kettle "
-                    "helm. None of them appear to be in usable condition."
+                    "and shields, including spear hafts, rusted bucklers, and a "
+                    "dented kettle helm. None of them are in any usable condition."
                 ),
             },
             location="hall_3"
@@ -583,12 +550,12 @@ def build_demo_world() -> World:
                 "desc": (
                     "A section of the north wall where the stonework is noticeably "
                     "newer than its surroundings — lighter in colour, the mortar "
-                    "less weathered. Something was sealed up here, and not too "
-                    "long ago in the life of this building. There is no visible "
-                    "mechanism to open it from this side."
+                    "less weathered. It seems as though a staircase was sealed up here, "
+                    "and not too long ago in the life of this building. There is no "
+                    "visible mechanism to open it from this side."
                 ),
                 "desc_open": (
-                    "The passage that was hidden behind the newer stonework stands "
+                    "The staircase that was hidden behind the newer stonework stands "
                     "open. Cold air drifts through from the cellar below."
                 ),
             },
@@ -606,8 +573,8 @@ def build_demo_world() -> World:
                 "desc": (
                     "Large flat stones that once formed a formal approach to the "
                     "manor. Many have cracked and shifted as roots have pushed up "
-                    "beneath them. Moss fills the gaps. In places the ground has "
-                    "swallowed them entirely."
+                    "beneath them. Moss fills the gaps. In some places, the ground "
+                    "has swallowed them entirely."
                 ),
             },
             location="entryway"
@@ -625,7 +592,7 @@ def build_demo_world() -> World:
                     "They close in the garden on all sides except where the iron "
                     "gate and the gatehouse provide gaps. Pressing close to the "
                     "base of the hedge, you notice a patch of small silvery-green "
-                    "plants growing wild — catnip, by the smell of it."
+                    "plants growing wild, presumably catnip by the smell of it."
                 ),
             },
             location="entryway"
@@ -659,7 +626,7 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "A tall iron gate set into the hedge, its bars eaten through "
-                    "with rust. It hangs permanently open — the hinges have long "
+                    "with rust. It hangs permanently open and the hinges have long "
                     "since fused in that position. The wooded path lies beyond."
                 ),
             },
@@ -676,10 +643,10 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "The portcullis is raised and rusted solid in that position. "
-                    "Its iron teeth point downward, suspended above the road. "
-                    "The mechanism that would lower it is somewhere in the "
-                    "gatehouse structure above, but whatever chain or counterweight "
-                    "operated it has long since failed."
+                    "Its iron teeth loom overhead, forbodingly suspended above "
+                    "the road. The mechanism that would lower it is somewhere in "
+                    "the gatehouse structure above, but whatever chain or "
+                    "counterweight operated it has long since failed."
                 ),
             },
             location="gatehouse"
@@ -694,8 +661,7 @@ def build_demo_world() -> World:
                     "The road passes beneath the gatehouse arch and disappears "
                     "into the trees to the east. Wheel ruts are still faintly "
                     "visible in the packed earth, though grass has begun to "
-                    "reclaim them. It leads somewhere — but not somewhere you "
-                    "need to go just yet."
+                    "reclaim them. "
                 ),
             },
             location="gatehouse"
@@ -729,11 +695,11 @@ def build_demo_world() -> World:
             tags={"scenery"},
             props={
                 "desc": (
-                    "A collection of mounted animal heads — stags, boars, a wolf "
-                    "with glass eyes that catch the light unpleasantly. They are "
-                    "dusty and several have lost patches of fur. Someone spent "
-                    "considerable time and effort acquiring these, and now no one "
-                    "tends them."
+                    "A collection of mounted animal heads, such as stags, boars, "
+                    "and wolves, with glass eyes that catch the light unpleasantly. "
+                    "They are dusty and several have lost patches of fur. Someone "
+                    "spent considerable time, effort, and risk acquiring these, "
+                    "and now no one tends them."
                 ),
             },
             location="trophy_room"
@@ -771,11 +737,12 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "A glass-fronted display case with a small brass clasp. "
-                    "The glass is dusty but intact."
+                    "The glass is dusty but intact. You make out some items "
+                    "inside."
                 ),
                 "desc_empty": (
                     "A glass-fronted display case with a small brass clasp. "
-                    "The glass is dusty but intact."
+                    "The glass is dusty but intact. It appears empty."
                 ),
                 "open": False,
                 "locked": True,
@@ -797,12 +764,12 @@ def build_demo_world() -> World:
                 "readable_text": (
                     "The handwriting is cramped and hurried. Most entries are mundane "
                     "household accounts. Near the back, one entry is written in a "
-                    "much smaller hand — too small to read without a lens."
+                    "much smaller hand that is too small to read without a lens."
                 ),
                 "readable_text_magnified": (
                     "The handwriting is cramped and hurried. Most entries are mundane "
                     "household accounts, but near the back you find an entry that reads:\n\n"
-                    "\"I have hidden the reserve key in the old way — the stag knows "
+                    "\"I have hidden the reserve key in the old way. The stag knows "
                     "where it rests. A firm pull on the heavy antler will remind him.\""
                 ),
             },
@@ -827,7 +794,8 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "A broad-bladed sword, the steel dulled with age but the edge "
-                    "still serviceable. A faded crest is etched into the forte."
+                    "still serviceable. A faded crest is etched into the blade "
+                    "close to the hilt."
                 ),
                 "damage": 4,
                 "damage_type": "slash",
@@ -844,7 +812,7 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "A long hunting knife with a bone handle, well-balanced and "
-                    "light enough to throw. The blade curves slightly toward the tip."
+                    "suprisingly light. The blade curves slightly toward the tip."
                 ),
                 "damage": 2,
                 "damage_type": "pierce",
@@ -913,9 +881,8 @@ def build_demo_world() -> World:
             tags={"scenery"},
             props={
                 "desc": (
-                    "A heavy iron rack bolted to the stone wall, holding an assortment "
-                    "of weapons and armour. Each item hangs on pegs or hooks. "
-                    "They look old but not entirely decorative."
+                    "A heavy iron rack bolted to the stone wall, equipped to hold "
+                    "an assortment of weapons and armour from pegs or hooks. "
                 ),
             },
             location="trophy_room"
@@ -1014,6 +981,16 @@ def build_demo_world() -> World:
                     "A shallow basin carved from a single piece of dark stone. "
                     "Serpents intertwine around its rim. It is dry and empty."
                 ),
+                "desc_water": (
+                    "A shallow basin carved from dark stone, its rim wound with "
+                    "serpent carvings. It holds water now, cold and still. "
+                    "The serpents watch, unimpressed. Something feels unfinished."
+                ),
+                "desc_activated": (
+                    "A shallow basin of dark stone, its carved serpents traced with "
+                    "faint luminescence. The water within glows softly green. "
+                    "Whatever power it holds has already done its work."
+                ),
                 "open": True,   # no lid — always accessible
                 "activated": False,
                 "liquid": None,
@@ -1031,8 +1008,8 @@ def build_demo_world() -> World:
                 "desc": (
                     "A heavy amulet of green-black stone set in tarnished silver, "
                     "carved in the shape of two coiled serpents. It is cold to the touch "
-                    "but seems to pulse faintly when held — or perhaps that is just "
-                    "your heartbeat. Whatever it is, it did not come from this world "
+                    "but seems to pulse faintly when held. Or perhaps that is just "
+                    "your heartbeat. Regardless, it did not come into this world "
                     "to be left in a basin."
                 ),
                 "worn":         False,
@@ -1058,7 +1035,7 @@ def build_demo_world() -> World:
                     "The far wall is rough-hewn stone, damp with age. "
                     "An iron lever protrudes from the rock, crusted with old rust. "
                     "A counterweight mechanism behind it suggests it controls "
-                    "something elsewhere in the house."
+                    "things deep within the manor."
                 ),
                 "requires_light": True,
             },
@@ -1073,6 +1050,8 @@ def build_demo_world() -> World:
             tags={"portable", "lightable"},
             props={
                 "desc": "A battered tin oil lamp with a glass chimney. It needs fuel.",
+                "desc_fuelled": "A battered tin oil lamp with a glass chimney. It is filled with oil, ready to light.",
+                "desc_lit":     "A battered tin oil lamp with a glass chimney. A warm, steady flame burns inside it.",
                 "lit": False,
                 "fuelled": False,
             },
@@ -1120,7 +1099,7 @@ def build_demo_world() -> World:
                 "desc": (
                     "An iron lever set into the cellar's far wall. It is crusted with "
                     "old rust but looks like it would still move. A counterweight "
-                    "mechanism suggests it controls something elsewhere in the house."
+                    "mechanism suggests it controls something in the house."
                 ),
                 "pulled": False,
                 "requires_light": True,  # only visible with lit lamp
@@ -1140,8 +1119,8 @@ def build_demo_world() -> World:
                 "readable_text": (
                     "The note is written in a precise, careful hand:\n\n"
                     "\"The ring must be worn when the basin is fed. Water alone "
-                    "will not wake it — the serpents must recognise their bearer. "
-                    "The study above the trophy room is where the old work was done. "
+                    "will not wake it, as the serpents must recognise their bearer. "
+                    "The study by the trophy room is where the old work was done. "
                     "Wear the ring. Bring water. The rest will follow.\""
                 ),
             },
@@ -1179,7 +1158,7 @@ def build_demo_world() -> World:
             tags={"scenery"},
             props={"desc": (
                 "A narrow staircase tucked into the corner of the hall. "
-                "The treads are bare wood, worn smooth in the centre from long use. "
+                "The treads are bare wood, worn smooth in the center from long use. "
                 "It rises steeply to the upper floor."
             )},
             location="hall_2"
@@ -1192,8 +1171,8 @@ def build_demo_world() -> World:
             tags={"scenery"},
             props={"desc": (
                 "A small wooden nightstand beside the bed. Its surface is dusty "
-                "but a few objects remain on top — someone left in a hurry, or "
-                "simply stopped coming back."
+                "but a few objects remain on top. Either someone left in a hurry "
+                "or simply stopped coming back."
             )},
             location="bedroom_east"
         ),
@@ -1284,8 +1263,8 @@ def build_demo_world() -> World:
             tags={"scenery"},
             props={"desc": (
                 "A heavy timber shelf running the length of one wall. Whatever "
-                "was stored here has long since been used, spoiled, or taken. "
-                "A few containers remain — a flask of lamp oil among them."
+                "was stored here has long since been used, spoiled, or taken, "
+                "save for a few remaining containers."
             )},
             location="gatehouse_interior"
         ),
@@ -1298,8 +1277,9 @@ def build_demo_world() -> World:
                 "desc": (
                     "It is large. Larger than seems reasonable, really. Its skin "
                     "is the same grey as the bridge stones, which probably is not "
-                    "a coincidence. It watches you with small, clever eyes that "
-                    "do not miss much."
+                    "a coincidence and it has a long, thick shock of wispy blue "
+                    "hair standing strait up. It watches you with small, clever "
+                    "eyes that do not miss much."
                 ),
             },
             location="bridge"
@@ -1347,7 +1327,7 @@ def build_demo_world() -> World:
                     "without mortar to its neighbour. Serpent carvings wind up "
                     "both pillars and meet at the keystone. The opening frames "
                     "nothing but the far trees. An inscription is carved into "
-                    "the lintel."
+                    "the top of the arch."
                 ),
                 "desc_active": (
                     "The archway pulses with soft light, the serpent carvings "
@@ -1373,8 +1353,8 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "The portal shimmers with quiet light. Beyond it you can see "
-                    "something familiar — warmth, comfort, a world that makes sense. "
-                    "It will not stay open forever."
+                    "a familiar world that makes sense. You sense that it will "
+                    "not stay open forever."
                 ),
             },
             location="hidden"
@@ -1470,8 +1450,8 @@ def build_demo_world() -> World:
                     "An amorphous mass in a vaguely humanoid shape, dark and "
                     "iridescent, like oil on water. It has no face, but there is "
                     "something in the way it orients toward you that is unmistakably "
-                    "attentive. It smells of sulphur and hot metal. It is larger "
-                    "than a person."
+                    "attentive. It smells of sulphur and hot metal. It is much "
+                    "larger than a person and looms over you menacingly."
                 ),
                 "hp":         120,
                 "max_hp":     120,
@@ -1489,9 +1469,8 @@ def build_demo_world() -> World:
             tags={"scenery"},
             props={
                 "desc": (
-                    "A spreading pool of dark, iridescent fluid — all that remains "
-                    "of the slime golem. The smell of sulphur lingers. Something "
-                    "glitters at the centre of the pool."
+                    "A spreading pool of dark, iridescent fluid is all that remains "
+                    "of the slime golem. The smell of sulphur lingers."
                 ),
             },
             location="hidden"
@@ -1572,7 +1551,7 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "A massive iron range, cold for decades. The grate is "
-                    "packed with grey ash and the iron is furred with rust. "
+                    "packed with grey ash and the iron is coated in rust. "
                     "Someone once cooked serious quantities of food on this."
                 ),
             },
@@ -1587,8 +1566,7 @@ def build_demo_world() -> World:
             props={
                 "desc": (
                     "Wooden shelves still holding a scatter of earthenware "
-                    "storage jars and rusted kitchen implements. The tin of "
-                    "cat food stands out as clearly more recent."
+                    "storage jars and rusted kitchen implements."
                 ),
             },
             location="kitchen"
