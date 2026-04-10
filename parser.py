@@ -748,6 +748,9 @@ def rewrite_interaction_idioms(text: str) -> str:
 
         # UNMOUNT idioms — all route to "unmount <obj>"
         (r"^take\s+down\s+(.+)$",                       r"unmount \1"),
+        (r"^take\s+(.+)\s+off\s+(the\s+)?wall$",       r"unmount \1"),
+        (r"^take\s+(.+)\s+off\s+(the\s+)?rack$",       r"unmount \1"),
+        (r"^grab\s+(.+)\s+off\s+(the\s+)?wall$",       r"unmount \1"),
         (r"^remove\s+(.+)\s+from\s+(the\s+)?wall$",   r"unmount \1"),
         (r"^remove\s+(.+)\s+from\s+(the\s+)?mount$",  r"unmount \1"),
         (r"^remove\s+(.+)\s+from\s+(the\s+)?rack$",   r"unmount \1"),

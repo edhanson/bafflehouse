@@ -2126,7 +2126,10 @@ def _execute_combat_action(world: World, action: str) -> str:
     world.player.hp      = _COMBAT_SESSION.player_hp
     world.player.stamina = _COMBAT_SESSION.player_stamina
 
-    # Ring regen: apply during combat after each non-terminal round
+    # Ring regen: apply during combat after each non-terminal round.
+    # Must happen before the prompt is assembled so the updated HP
+    # is reflected in the status line and the message appears above it.
+    regen_lines = []
     if outcome == "continue":
         for eid in world.player.worn_armour:
             ent = world.entities.get(eid)
@@ -2142,7 +2145,20 @@ def _execute_combat_action(world: World, action: str) -> str:
                     if display.lower().startswith(article):
                         display = display[len(article):]
                         break
-                narrative += f"\n{display.capitalize()} pulses warmly. (HP +{regen})"
+                regen_lines.append(
+                    f"{display.capitalize()} pulses warmly. (HP +{regen})"
+                )
+
+    # Insert regen lines before the combat prompt.
+    # The prompt is always the last "\n\n"-separated block in the narrative.
+    if regen_lines:
+        regen_text = "\n".join(regen_lines)
+        # Split off the trailing prompt block and reinsert regen before it
+        if "\n\n" in narrative:
+            body, prompt_block = narrative.rsplit("\n\n", 1)
+            narrative = body + "\n" + regen_text + "\n\n" + prompt_block
+        else:
+            narrative = narrative + "\n" + regen_text
 
     # Always write current golem HP back to entity so it persists
     golem = world.entities.get("slime_golem")
@@ -2313,8 +2329,7 @@ _WIN_NARRATIVE = (
     "ordinary life. The archway is gone. The manor is gone. "
     "Whatever the Bafflehouse was, and whatever brought you there, "
     "it has released you.\n\n"
-    "You are home.\n\n"
-    "[ You have won. Press Enter to exit. ]"
+    "You are home."
 )
 
 
