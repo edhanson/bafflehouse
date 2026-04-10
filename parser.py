@@ -647,7 +647,7 @@ def rewrite_movement_idioms(text: str) -> str:
     t = normalize(text)
 
     rewrites = [
-        (r"^go\s+through\s+(.+)$", r"enter \1"),
+        (r"^go\s+(?:to|into|inside|in)\s+(.+)$",         r"enter \1"),
         (r"^walk\s+through\s+(.+)$", r"enter \1"),
         (r"^step\s+through\s+(.+)$", r"enter \1"),
         (r"^move\s+through\s+(.+)$", r"enter \1"),
@@ -1832,6 +1832,16 @@ def affordance_bonus(verb: str, ent: Entity, slot_name: str, prep: Optional[str]
         if verb == "unlock" and ent.props.get("key_id") is not None:
             bonus += 1.5
 
+        # For instrument-like iobj slots, strongly prefer items in inventory
+        # (location == "player") over items sitting in the room.
+        # This prevents "unlock door with key" from ambiguously matching a
+        # key on the floor over one in the player's hand.
+        if verb in ("unlock", "open", "fill", "light", "use"):
+            if getattr(ent, "location", None) == "player":
+                bonus += 2.0
+            else:
+                bonus -= 2.0
+
     return bonus
 
 
@@ -2141,6 +2151,24 @@ def ground_intent(
         tie_margin = 0.5 if one_word else 0.15
 
         tied = [eid for eid, score in matches if abs(score - top_score) < tie_margin]
+
+        # Additional check: if there are multiple candidates whose base name
+        # shares the same final noun as the phrase, always clarify — recency
+        # bias should not silently pick one key when the player has two keys.
+        # Only applies to the iobj (instrument) slot, only for items in
+        # inventory, and only when the phrase is the last word of the name.
+        if len(tied) == 1 and one_word and slot_name == "iobj":
+            phrase_root = normalize(str(phrase)).strip()
+            inv = set(world.player.inventory)
+            same_root = [
+                eid for eid, score in matches[:5]
+                if (eid in inv
+                    and phrase_root == normalize(
+                        world.entities[eid].name
+                    ).split()[-1])
+            ]
+            if len(same_root) > 1:
+                tied = same_root  # force clarification
 
         if len(tied) == 1:
             return tied[0], None

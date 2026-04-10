@@ -96,7 +96,7 @@ def build_demo_world() -> World:
             desc=(
                 "The northernmost reach of the hall. The air here is colder and the "
                 "portraits have given way to mounted weapons and shields. A heavy door "
-                "to the west leads into what looks like a trophy room. "
+                "to the west stands open into the trophy room. "
                 "A section of the north wall looks subtly different from the rest — "
                 "the stonework is newer, as if something was once bricked over."
             ),
@@ -183,8 +183,8 @@ def build_demo_world() -> World:
             title="Upper Landing",
             desc=(
                 "A wide landing connecting both staircases. The floorboards "
-                "creak underfoot. Two doors lead off the landing — one to the east "
-                "and one to the west. The main staircase descends to the foyer; "
+                "creak underfoot. Doorways lead east and west into the bedrooms. "
+                "The main staircase descends to the foyer; "
                 "a narrow servants' stair in the south corner drops back down "
                 "to the central hall."
             ),
@@ -356,7 +356,7 @@ def build_demo_world() -> World:
                 "A large stone-flagged kitchen, cold and long disused. A heavy "
                 "iron range squats against the far wall, its grate choked with "
                 "ash. Shelves still hold a scatter of earthenware pots and "
-                "rusted implements. A wooden door to the east leads back to "
+                "rusted implements. A low doorway to the east leads back to "
                 "the passage."
             ),
             exits={"east": "cellar_passage"}
@@ -370,7 +370,7 @@ def build_demo_world() -> World:
             desc=(
                 "A low stone passage smelling of damp and old wood. "
                 "Steps to the south descend to the wine cellar. "
-                "A door to the west stands open onto what was once the kitchen. "
+                "A low doorway to the west opens onto what was once the kitchen. "
                 "A bricked-over arch in the north wall hints at a former connection "
                 "to the hall above."
             ),
@@ -974,6 +974,27 @@ def build_demo_world() -> World:
                 "room_b": "secret_study"
             },
             location="trophy_room"
+        ),
+
+        # Door between the North Hall and Trophy Room.
+        # Starts open — freely accessible in both directions.
+        # Can be closed and re-opened; no lock.
+        "hall3_door": Entity(
+            eid="hall3_door",
+            name="a heavy door",
+            aliases=["door", "heavy door", "west door", "hall door",
+                     "trophy door", "trophy room door"],
+            tags={"door", "openable", "scenery"},
+            props={
+                "desc": (
+                    "A solid wooden door set into the west wall of the hall. "
+                    "Plain but sturdy."
+                ),
+                "open": True,
+                "room_a": "hall_3",
+                "room_b": "trophy_room",
+            },
+            location="hall_3"
         ),
 
         # ======================================================

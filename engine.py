@@ -738,12 +738,14 @@ def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
     if not obj:
         return "Open what?", False
 
-    # If the obj phrase contains "with", extract the tool from the raw text.
-    # This handles "open tin with can opener" when the parser doesn't split it.
-    if obj and " with " in str(obj) and not iobj:
-        parts = str(obj).split(" with ", 1)
-        obj  = parts[0].strip() or obj
-        iobj = parts[1].strip() or None
+    # If iobj wasn't grounded (verb_obj shape doesn't split "with" clause),
+    # try to extract the instrument from the raw phrase.
+    if not iobj:
+        raw_str = str(raw)
+        if " with " in raw_str:
+            after_with = raw_str.split(" with ", 1)[1].strip()
+            if after_with:
+                iobj = after_with  # raw phrase — will be resolved below
 
     if obj not in world.entities:
         return "You don't see that here.", False
@@ -785,8 +787,30 @@ def handle_open(world: World, ir: dict) -> Tuple[str, bool]:
             "The can opener does its job. The lid comes free with a ragged edge.",
         ]), True
 
-    if prep is not None and iobj is not None:
-        return "You can't open things with that. Perhaps you mean UNLOCK something WITH it.", False
+    if iobj is not None:
+        # Resolve iobj to an entity id if it's still a raw phrase
+        if iobj not in world.entities:
+            for eid, ent2 in world.entities.items():
+                if (eid in world.player.inventory
+                        and any(iobj.lower() == a.lower() or iobj.lower() in a.lower()
+                                for a in ent2.all_names())):
+                    iobj = eid
+                    break
+
+        # "open X with Y" where X is locked and Y is a key-like item:
+        # treat as unlock-then-open in one step.
+        if ("lockable" in ent.tags and ent.props.get("locked", False)
+                and iobj in world.entities
+                and "key_id" in world.entities[iobj].props):
+            unlock_ir = {**ir, "iobj": iobj}
+            unlock_msg, unlocked = handle_unlock(world, unlock_ir)
+            if not unlocked:
+                return unlock_msg, False
+            # Now try to open
+            open_msg, opened = handle_open(world, {**ir, "prep": None, "iobj": None})
+            return unlock_msg + "\n" + open_msg, opened
+        if prep is not None:
+            return "You can't open things with that. Perhaps you mean UNLOCK something WITH it.", False
 
     if "openable" not in ent.tags:
         return "That's not something you can open.", False
@@ -2324,12 +2348,17 @@ def handle_rest(world: World, ir: dict) -> Tuple[str, bool]:
 
 def handle_enter(world: World, ir: dict) -> Tuple[str, bool]:
     """
-    Enter a location or object: "enter portal", "go through archway", etc.
-    Routes to win condition when the portal is entered.
+    Enter a location or object: "enter portal", "enter room", "go through door".
+
+    Resolution order:
+      1. Portal win condition
+      2. Room name — if the named room is reachable via a current exit, go there
+      3. Open door entity — delegate to traverse_door
+      4. Generic refusal
     """
     obj = ir.get("obj") or ir.get("iobj")
 
-    # Portal win condition
+    # ── 1. Portal win condition ───────────────────────────────────────────
     portal    = world.entities.get("home_portal")
     portal_in_room = (
         portal and portal.location == world.player.location
@@ -2349,12 +2378,68 @@ def handle_enter(world: World, ir: dict) -> Tuple[str, bool]:
         SCORE_TRACKER.award("game_won")
         return _WIN_NARRATIVE, True
 
-    # Not a portal — give a gentle redirect
-    if obj:
-        ent = world.entities.get(obj)
-        name = ent.name if ent else str(obj)
-        return f"You can't enter {name}.", False
-    return "Enter what?", False
+    if not obj:
+        return "Enter what?", False
+
+    # Strip leading state adjectives that players naturally add
+    # ("open door" → "door", "closed door" → "door")
+    obj_clean = str(obj)
+    for adj in ("open ", "closed ", "the open ", "the closed ", "an open ", "a closed "):
+        if obj_clean.lower().startswith(adj):
+            obj_clean = obj_clean[len(adj):]
+            break
+
+    # Re-ground the cleaned phrase if it differs from original
+    if obj_clean != str(obj) and obj_clean not in world.entities:
+        # Try to match cleaned phrase against visible entity aliases
+        for eid, ent in world.entities.items():
+            if obj_clean.lower() in ent.all_names() and eid in world.visible_entities():
+                obj = eid
+                break
+
+    # ── 2. Room name — check if any exit leads there ──────────────────────
+    # obj may be a room id (grounded) or a raw phrase matching a room title
+    current_room = world.room()
+    for direction, dest_rid in current_room.exits.items():
+        dest_room = world.rooms.get(dest_rid)
+        if dest_room is None:
+            continue
+        # Match against room id or room title (case-insensitive)
+        if (obj == dest_rid
+                or (isinstance(obj, str)
+                    and dest_room.title.lower() == obj.lower())):
+            world.player.location = dest_rid
+            return do_look(world, show_npcs=False), True
+
+    # ── 3. Door entity — try to traverse it ──────────────────────────────
+    if obj in world.entities:
+        ent = world.entity(obj)
+        # Archway: dormant → atmospheric message; active → already handled above
+        if obj == "stone_archway":
+            if ent.props.get("active", False):
+                # Should have been caught by the portal check above, but catch here too
+                return "The portal is open. Step through it.", False
+            return narrate([
+                "You walk through the archway. The stone is cold and ancient "
+                "under your fingertips. Nothing happens. Whatever power it holds "
+                "is not yet awake.",
+                "You pass beneath the keystone. The air between the pillars feels "
+                "slightly different — thicker, perhaps, or just older. "
+                "Nothing stirs.",
+                "You step through the archway. The carved serpents seem to watch "
+                "you. The opening shows only the far trees beyond. "
+                "Something is missing.",
+            ]), True
+        if "door" in ent.tags:
+            return traverse_door(world, obj)
+        # Open container or other openable — give a specific message
+        if "openable" in ent.tags and ent.props.get("open", False):
+            return f"You can't go through {ent.name}.", False
+
+    # ── 4. Generic refusal ───────────────────────────────────────────────
+    ent = world.entities.get(obj)
+    name = ent.name if ent else str(obj)
+    return f"You can't enter {name}.", False
 
 
 def handle_save(world: World, ir: dict) -> Tuple[str, bool]:
