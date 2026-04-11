@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Interactive Fiction</title>
+  <!-- xterm.js from CDN — full terminal emulator in the browser -->
+  <link  href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <style>
+    body { margin: 0; background: #0a0a0a; display: flex;
+           justify-content: center; padding-top: 2rem; }
+    #terminal { width: 900px; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script>
+    // Create a terminal that matches your app's existing look.
+    const term = new Terminal({
+      fontFamily: 'monospace',
+      fontSize: 14,
+      theme: {
+        background: '#0a0a0a',
+        foreground: '#d4a843',   // amber — matches your terminal style
+      },
+      cursorBlink: true,
+    });
+
+    term.open(document.getElementById('terminal'));
+
+    // Connect to the server's WebSocket endpoint.
+    // Use wss:// when served over HTTPS (production), ws:// over HTTP (local).
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${protocol}://${location.host}/ws`);
+
+    // Game output → terminal display.
+    ws.onmessage = (event) => term.write(event.data);
+
+    // Keystrokes → game input.
+    term.onData((data) => ws.send(data));
+
+    ws.onclose = () => term.write('\r\n\n[Session ended]\r\n');
+  </script>
+</body>
+</html>

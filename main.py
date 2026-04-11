@@ -200,6 +200,50 @@ def load_help() -> str:
     )
 
 
+def display_help_paged(log: SessionLog) -> None:
+    """
+    Display help text in a terminal-aware paged format.
+
+    Page height is derived from the actual terminal size (Option B) with a
+    sensible fallback of 24 lines (Option A).  Each page pauses and waits
+    for the player to press Enter before continuing, or Q to quit early.
+    A few lines are reserved for the page indicator and the prompt itself.
+    """
+    RESERVED_LINES = 4   # page indicator + blank line + prompt + breathing room
+    term_height = shutil.get_terminal_size(fallback=(80, 24)).lines
+    page_height = max(10, term_height - RESERVED_LINES)
+
+    # Wrap the raw help text to the current terminal width first
+    raw   = load_help()
+    lines = wrap(raw).split("\n")
+
+    # Slice into pages
+    pages = []
+    for i in range(0, len(lines), page_height):
+        pages.append(lines[i : i + page_height])
+
+    total = len(pages)
+
+    for idx, page in enumerate(pages, start=1):
+        page_text = "\n".join(page)
+        print(page_text)
+        log.log_output(page_text)
+
+        if idx < total:
+            indicator = f"-- Page {idx}/{total} -- Press Enter to continue, Q to stop --"
+            try:
+                choice = input(f"\n{indicator} ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if choice in ("q", "quit"):
+                break
+        else:
+            # Last page — just show an end marker
+            end_marker = f"-- End of help (page {idx}/{total}) --"
+            print(end_marker)
+            log.log_output(end_marker)
+
+
 # ============================================================
 # Output helpers
 # ============================================================
@@ -287,9 +331,16 @@ def main() -> None:
         "You do not know whose house this is. "
         "But you have a sense that you are far from home. The air has "
         "the particular stillness of a place that has been waiting for "
-        "something. Are you that something? "
+        "something. Are you that something?\n\n"
+        "Welcome to the Bafflehouse! If you get stuck, trying entering 'help'."
     )
     print_and_log(intro, log)
+
+    try:
+        input("\n[ Press Enter to begin. ] ")
+    except (EOFError, KeyboardInterrupt):
+        pass
+
     print_and_log("", log)  # blank line between intro and room description
     initial_look = do_look(world)
     print_and_log(initial_look, log)
@@ -315,7 +366,7 @@ def main() -> None:
         # ── Dead state ───────────────────────────────────────────────────
         if player_dead or world.player.hp <= 0:
             try:
-                input(f"\n[ Press Enter to exit. ] ")
+                input("\n[ Press Enter to exit. ] ")
             except (EOFError, KeyboardInterrupt):
                 pass
             summary = score_summary(world.clock.now, outcome="died")
@@ -353,7 +404,7 @@ def main() -> None:
             break
 
         if normalised in {"help", "h", "?"}:
-            print_and_log(load_help(), log)
+            display_help_paged(log)
             continue
 
         # ── Engine ────────────────────────────────────────────────────────
