@@ -1,0 +1,8 @@
+# requirements_web.txt
+#
+# Runtime dependencies for the web version of the Bafflehouse interactive fiction engine.
+#
+fastapi>=0.110.0
+uvicorn>=0.29.0
+ptyprocess>=0.7.0
+websockets>=12.0

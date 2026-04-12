@@ -8,10 +8,12 @@ from typing import Dict, List, Optional, Tuple
 from model import Entity, World
 
 
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    SentenceTransformer = None  # type: ignore
+# SentenceTransformer is imported lazily inside Embedder.__post_init__
+# rather than at module level.  This prevents torch from being loaded
+# into memory when semantics.py is imported in web mode (WEB_MODE=1),
+# where the model is intentionally skipped to stay within the Render
+# free tier RAM limit.  A module-level import would load torch regardless
+# of whether the model is ever used, crashing the process on startup.
 
 
 # ============================================================
@@ -50,18 +52,24 @@ class Embedder:
     def __post_init__(self) -> None:
         model_path = Path(self.local_model_dir)
 
-        if SentenceTransformer is None:
-            self.load_error = "sentence-transformers is not installed."
-            self.model = None
-            return
-
+        # Lazy import — only attempt to load torch/sentence-transformers
+        # if the model directory actually exists.  This means that in web
+        # mode, where local_model_dir is set to a non-existent path, torch
+        # is never imported and no memory is consumed by it.
         if not model_path.exists():
             self.load_error = f"Local model directory not found: {model_path.resolve()}"
             self.model = None
             return
 
         try:
-            self.model = SentenceTransformer(
+            from sentence_transformers import SentenceTransformer as _ST
+        except ImportError:
+            self.load_error = "sentence-transformers is not installed."
+            self.model = None
+            return
+
+        try:
+            self.model = _ST(
                 str(model_path),
                 local_files_only=True,
             )
