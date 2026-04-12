@@ -40,13 +40,37 @@ A Trello board relating to the design process is located here:
 
 https://trello.com/invite/b/69a662e4f72d8d716a5ce25a/ATTI5211371a244b154db52768cec047559fB721D2E1/quantic-capstone-project
 
+These were the user stories satisfied during development.
+
+User Story 1: As Cassie, I need a user experience with a shallow learning curve so that I can quickly make progress without feeling frustrated or overwhelmed.
+User Story 2: As Cassie, I need to be able to make progress in the game so that I can feel validated and satisfied at learning a new task.
+User Story 3: As Rory, I need a game with authentic retro details so that I can feel nostalgic for a time when games were simpler and left the details to the user's imagination.
+User Story 4: As Karl, I need a game that I can easily understand and learn to play so that I can experience the first-hand wonders of a real adventure.
+User Story 5: As Nellie, I need the instructions for the game to be self-contained so that I can learn to play naturally as I go.
+User Story 6: As Nellie, I need the game to clearly tell me when I did something meaningful, so that I understand that I'm making progress.
+User Story 7: As Priya, I need puzzle to be logically solvable from information I can find in the game, so that success feels earned rather than guessed.
+User Story 8: As Sam, I need the story to have a clear sense of direction, so that I feel pulled forward by the narrative.
+User Story 9: As Morgan, I need the parser to accept common phrasing and provide clarifying prompts, so that I’m not blocked by exact wording.
+User Story 10: As Harper, I need the game to be entertaining to watch and read aloud, so that playing with a friend is fun even when only one person controls.
+User Story 11: As Harper, I need presentation options that work well on a shared screen, so that spectators can follow what’s happening.
+User Story 12: As Jules, I need the game to support play in short bursts, so that I can make meaningful progress during brief breaks.
+User Story 13: As Ollie, I need a game with a scoring mechanism, so that I can attempt to obtain the maximum score.
+User Story 14: As Ollie, I need a game that tracks turns expended, so that I can attempt to win the game in the fewest possible turns.
+User Story 15: As Fiona, I need a game with medieval-style combat details and a meaningful choice of armor, weapons, and accessories.
+User Story 16: As Patty, I need a story involving an animal that the player can befriend and care for.
+
 During development, extensive use was also made of issue tracking within the GitHub repository.
+
+Very late in the development, a special version was hosted online at:
+https://bafflehouse.onrender.com/
+
+This special online version lacks a game save feature and has more limited natural language processing capabilities as it runs without the vector embedding model.
 
 ## General Architectural Design Decisions
 
 The coding of the game in Python and its presentation across multiple files was performed with object-oriented design principles in mind. A modest attempt was made to honor the SOLID principles of sound object-oriented design. The last conversation with the Claude Chatbot mentioned in the previous section details a late discussion between the developer and Claude where Claude gave a generally positive assessment of the object-oriented design. However, much concern was raised over the bloating of the `engine.py` script at the time, as the development leaned too heavily on this script as an accumulation point of various bits of disparate functionality. Though not all phases of Claude's suggestions were implemented, the first and most significant phase was enacted, which significantly diminished the number of functions packed into `engine.py` by introducing the `handlers` module that currently contains 10 files to help with handling various game actions.
 
-The resulting architecture pays general respect to the SOLID principles, particularly given its broad scope and the number of different components of the world that is modeling. Though no doubt deeper refinements could be orchestrated, most of the various game components pay heed to the SOLID principles. The parser in particular follows sound object-oriented design principles, including a factory method as demonstrated by `build_default()` within the `ParserSystem` class.
+The resulting architecture pays general respect to the SOLID principles, particularly given its broad scope and the number of different components of the world that it is modeling. Though no doubt deeper refinements could be orchestrated, most of the various game components pay heed to these principles. In particular, it is worth noting that the parser includes a factory method as demonstrated by `build_default()` within the `ParserSystem` class.
 
 ## Testing
 

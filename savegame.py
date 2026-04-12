@@ -102,6 +102,24 @@ def _serialise_world(world: "World") -> dict:
     except Exception:
         pass  # NPC state is best-effort
 
+    # ── Troll state ───────────────────────────────────────────────────────
+    # TrollMemory is intentionally session-only (no file persistence), but
+    # must be saved here so the save/load cycle preserves puzzle progress.
+    troll_state: dict = {}
+    try:
+        from engine import TROLL_MEMORY
+        ts = TROLL_MEMORY.state()
+        troll_state = {
+            "correct_count": ts.correct_count,
+            "solved":        list(ts.solved),
+            "seen":          list(ts.seen),
+            "weights":       dict(ts.weights),
+            "bridge_open":   ts.bridge_open,
+            "current_rid":   ts.current_rid,
+        }
+    except Exception:
+        pass  # troll state is best-effort
+
     # ── Scoring milestones ────────────────────────────────────────────────
     # The TRACKER singleton lives in memory only; save the achieved list so
     # resuming a session restores the correct score and milestone state.
@@ -112,12 +130,13 @@ def _serialise_world(world: "World") -> dict:
         achieved_milestones = []
 
     return {
-        "version":            SAVE_VERSION,
-        "clock":              world.clock.now,
-        "player":             player,
-        "rooms":              rooms,
-        "entities":           entities,
-        "npc_state":          npc_state,
+        "version":             SAVE_VERSION,
+        "clock":               world.clock.now,
+        "player":              player,
+        "rooms":               rooms,
+        "entities":            entities,
+        "npc_state":           npc_state,
+        "troll_state":         troll_state,
         "achieved_milestones": achieved_milestones,
     }
 
@@ -243,6 +262,21 @@ def load_game(world: "World", data: dict) -> str:
                 NPC_MEMORY.save()
             except Exception:
                 pass  # NPC restore is best-effort
+
+        # ── Troll state ───────────────────────────────────────────────────
+        ts_data = data.get("troll_state", {})
+        if ts_data:
+            try:
+                from engine import TROLL_MEMORY
+                ts = TROLL_MEMORY.state()
+                ts.correct_count = ts_data.get("correct_count", 0)
+                ts.solved        = list(ts_data.get("solved", []))
+                ts.seen          = list(ts_data.get("seen", []))
+                ts.weights       = dict(ts_data.get("weights", {}))
+                ts.bridge_open   = ts_data.get("bridge_open", False)
+                ts.current_rid   = ts_data.get("current_rid", None)
+            except Exception:
+                pass  # troll restore is best-effort
 
         # ── Scoring milestones ────────────────────────────────────────────
         achieved = data.get("achieved_milestones", [])

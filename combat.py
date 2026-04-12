@@ -243,6 +243,10 @@ class CombatSession:
         self.jasper_present = present
 
     def to_combat_state(self) -> CombatState:
+        # Equipment (wearing_coif, wearing_shield) is intentionally excluded
+        # from CombatState — it affects combat resolution but not the
+        # Q-learner's state key, so the golem's learned tactics generalise
+        # across loadouts.
         return CombatState(
             player_hp          = self.player_hp,
             player_max_hp      = self.player_max_hp,
@@ -250,8 +254,6 @@ class CombatSession:
             npc_max_hp         = self.golem_max_hp,
             player_last_action = self.last_player_action,
             round_num          = self.round_num,
-            wearing_coif       = self.wearing_coif,
-            wearing_shield     = self.wearing_shield,
         )
 
 

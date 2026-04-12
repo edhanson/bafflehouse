@@ -7,10 +7,17 @@
 # requires no pretraining, and updates from actual gameplay.
 #
 # Key design choices:
-#   - epsilon (exploration rate) never goes to zero — the NPC always has
-#     a small chance of doing something unexpected.
-#   - Learning rate is deliberately modest so the NPC doesn't become a
-#     perfect counter in a single session.
+#   - The state key is a 4-tuple (player_health_tier, npc_health_tier,
+#     player_last_action, round_tier).  Equipment is deliberately excluded
+#     so that learning transfers across loadouts — the golem learns to
+#     fight the *player*, not a specific gear set.
+#   - softmax_temp is set low (0.3) so that even modest Q-value differences
+#     produce meaningful probability shifts after just a few sessions.
+#   - alpha (learning rate) is set to 0.25 — high enough that each fight's
+#     lessons are perceptible, low enough that the NPC doesn't overfit to
+#     a single encounter.
+#   - Every action retains a minimum floor probability (min_action_prob=0.05)
+#     so the NPC is never fully predictable.
 #   - The NPC's health is part of the state, so it fights differently
 #     when injured vs. at full strength.
 
@@ -24,13 +31,21 @@ from typing import Dict, List, Optional, Tuple
 
 
 # ── State encoding ──────────────────────────────────────────────────────────
-# State is a tuple of small integers representing the combat situation.
+# State is a tuple of four small integers representing the combat situation.
 #
 # (player_health_tier, npc_health_tier, player_last_action, round_number_tier)
 #
 #   health tiers:  0=critical(0-25%), 1=hurt(25-50%), 2=okay(50-75%), 3=full(75-100%)
 #   action index:  integer index into the PLAYER_ACTIONS list
 #   round tier:    0=early(1-3), 1=mid(4-8), 2=late(9+)
+#
+# Equipment (coif, shield) is intentionally excluded from the state key.
+# Including it fragments the state space — the golem would need to learn
+# separate strategies for every gear combination, requiring many more
+# sessions before meaningful preferences develop.  The golem still
+# *reacts* to equipment through the combat resolution logic (damage
+# reduction, block effectiveness), but its learned tactical preferences
+# generalise across loadouts.
 
 PLAYER_ACTIONS = [
     "attack",        # standard strike with current weapon
@@ -86,8 +101,6 @@ class CombatState:
     npc_max_hp:         int
     player_last_action: str
     round_num:          int
-    wearing_coif:       bool = False
-    wearing_shield:     bool = False
 
     def to_key(self) -> tuple:
         return (
@@ -96,8 +109,6 @@ class CombatState:
             PLAYER_ACTIONS.index(self.player_last_action)
                 if self.player_last_action in PLAYER_ACTIONS else 0,
             encode_round(self.round_num),
-            int(self.wearing_coif),
-            int(self.wearing_shield),
         )
 
 
@@ -117,24 +128,27 @@ class QLearner:
 
     Parameters
     ----------
-    alpha            : learning rate
+    alpha            : learning rate (0.25 — each fight's lessons land
+                       noticeably; still low enough to avoid overfitting
+                       to a single encounter)
     gamma            : discount factor
     epsilon          : retained for serialisation compatibility; no longer
                        used in action selection (floor replaces it)
     epsilon_decay    : retained for compatibility
     epsilon_min      : retained for compatibility
     min_action_prob  : minimum probability for each action (default 0.05)
-    softmax_temp     : temperature for Q-value softmax (default 1.0)
-                       higher = more uniform; lower = more greedy
+    softmax_temp     : temperature for Q-value softmax (default 0.3)
+                       lower values amplify small Q-value differences,
+                       making learned preferences perceptible sooner
     """
     npc_id:           str
-    alpha:            float = 0.15
+    alpha:            float = 0.25      # bumped from 0.15 for faster learning
     gamma:            float = 0.85
     epsilon:          float = 0.30      # kept for serialisation compatibility
     epsilon_decay:    float = 0.95      # kept for serialisation compatibility
     epsilon_min:      float = 0.10      # kept for serialisation compatibility
     min_action_prob:  float = 0.05      # floor probability per action
-    softmax_temp:     float = 1.0       # Q-value softmax temperature
+    softmax_temp:     float = 0.30      # lowered from 1.0 to amplify Q-diffs
 
     _q: Dict[tuple, List[float]] = field(default_factory=dict)
     _sessions: int = 0
@@ -259,19 +273,42 @@ class QLearner:
     def from_dict(cls, data: dict) -> "QLearner":
         obj = cls(
             npc_id          = data["npc_id"],
-            alpha           = data.get("alpha",           0.15),
+            # Use the NEW defaults for alpha and softmax_temp even when
+            # loading old data — this applies the parameter changes (#2, #3)
+            # to existing learners rather than preserving stale values.
+            alpha           = 0.25,
             gamma           = data.get("gamma",           0.85),
             epsilon         = data.get("epsilon",         0.30),
             epsilon_decay   = data.get("epsilon_decay",   0.95),
             epsilon_min     = data.get("epsilon_min",     0.10),
             min_action_prob = data.get("min_action_prob", 0.05),
-            softmax_temp    = data.get("softmax_temp",    1.0),
+            softmax_temp    = 0.30,
         )
         obj._sessions = data.get("sessions", 0)
-        obj._q = {
-            tuple(int(x) for x in k.strip("()").split(",") if x.strip()): v
-            for k, v in data.get("q_table", {}).items()
-        }
+
+        # ── Q-table key migration ────────────────────────────────────────
+        # Older saves stored 6-tuple keys:
+        #   (player_hp_tier, npc_hp_tier, action_idx, round_tier,
+        #    wearing_coif, wearing_shield)
+        #
+        # Current format uses 4-tuple keys (equipment bits removed).
+        # When a 6-tuple is encountered, strip the last two elements.
+        # If multiple 6-tuples collapse to the same 4-tuple, merge by
+        # taking the element-wise max — this preserves the golem's
+        # strongest learned preference for each action in each state.
+        raw_q = {}
+        for k_str, v in data.get("q_table", {}).items():
+            key = tuple(
+                int(x) for x in k_str.strip("()").split(",") if x.strip()
+            )
+            if len(key) > 4:
+                key = key[:4]   # strip equipment bits
+            if key in raw_q:
+                # Merge: element-wise max of existing and new row
+                raw_q[key] = [max(a, b) for a, b in zip(raw_q[key], v)]
+            else:
+                raw_q[key] = list(v)
+        obj._q = raw_q
         return obj
 
 
