@@ -56,86 +56,70 @@ RIDDLE_BANK: List[TrollRiddle] = [
     TrollRiddle(
         rid="r01",
         text=(
-            "I have cities, but no houses live there. "
-            "I have mountains, but no trees grow them. "
-            "I have water, but no fish swim in it. "
-            "I have roads, but no one travels them. "
-            "What am I?"
+            "What unexpected item is found within the forest maze?"
         ),
-        answer="a map",
-        accepted=["map", "a map", "maps"],
+        answer="catfood tin",
+        accepted=["catfood", "catfood tin", "cat food", "cat food tin", 
+                  "tin", "the catfood", "the catfood tin", 
+                  "the cat food", "the cat food tin", "the tin"],
     ),
     TrollRiddle(
         rid="r02",
         text=(
-            "The more you take, the more you leave behind. "
-            "What am I?"
+            "What is growing under the hedges in the overgrown garden?"
         ),
-        answer="footsteps",
-        accepted=["footsteps", "footstep", "steps", "a footstep",
-                  "your footsteps", "tracks"],
+        answer="catnip",
+        accepted=["catnip", "cat nip", "the catnip", "the cat nip"],
     ),
     TrollRiddle(
         rid="r03",
         text=(
-            "I speak without a mouth and hear without ears. "
-            "I have no body, but I come alive with the wind. "
-            "What am I?"
+            "What figures adorn the basin?"
         ),
-        answer="an echo",
-        accepted=["echo", "an echo", "echoes"],
+        answer="serpents",
+        accepted=["serpents", "serpent", "the serpents", "the serpent"],
     ),
     TrollRiddle(
         rid="r04",
         text=(
-            "I am always in front of you but cannot be seen. "
-            "What am I?"
+            "What key unlocks the heavy oak door?"
         ),
-        answer="the future",
-        accepted=["future", "the future", "tomorrow", "what lies ahead"],
+        answer="brass key",
+        accepted=["brass key", "the brass key"],
     ),
     TrollRiddle(
         rid="r05",
         text=(
-            "I have hands but cannot clap. "
-            "What am I?"
+            "What color is the cat?"
         ),
-        answer="a clock",
-        accepted=["clock", "a clock", "watch", "a watch", "timepiece"],
+        answer="grey",
+        accepted=["grey", "gray"],
     ),
     TrollRiddle(
         rid="r06",
         text=(
-            "The one who makes me has no need of me. "
-            "The one who buys me does not want me. "
-            "The one who uses me does not know it. "
-            "What am I?"
+            "What area of the manor has a chandelier?"
         ),
-        answer="a coffin",
-        accepted=["coffin", "a coffin", "casket", "a casket",
-                  "grave", "a grave", "burial box"],
+        answer="foyer",
+        accepted=["foyer", "the foyer"],
     ),
     TrollRiddle(
         rid="r07",
         text=(
-            "I can be cracked, I can be made. "
-            "I can be told, I can be played. "
-            "What am I?"
+            "How many matches are initally in the box?"
         ),
-        answer="a joke",
-        accepted=["joke", "a joke", "jokes", "riddle", "a riddle",
-                  "jest", "a jest"],
+        answer="ten",
+        accepted=["ten", "10", "ten matches", "10 matches"],
     ),
     TrollRiddle(
         rid="r08",
         text=(
-            "I can clap but I have no hands. "
-            "What am I?"
+            "In what direction should one head from "
+            "the upper landing to reach the servants' "
+            "stairway?"
         ),
-        answer="thunder",
-        accepted=["thunder", "thunderclap", "thunderstorm", "a thunderclap", 
-                  "a thunderstorm", "thunder clap", "thunder storm", 
-                  "a thunder clap", "a thunder storm"],
+        answer="south",
+        accepted=["south", "south"],
     )
 ]
 
@@ -240,22 +224,21 @@ TROLL_GREETINGS = [
         "plants itself in your path. It is broad, grey-skinned, and unimpressed.\n"
         "\"HALT,\" it says, with the air of someone who has said this many times "
         "and enjoyed it every time. \"No one crosses my bridge without answering "
-        "a riddle. Them's the rules.\""
+        "three questions. Them's the rules.\""
     ),
     (
         "Something heavy shifts beneath the bridge. A moment later, an enormous "
         "grey figure hauls itself up onto the road and regards you with small, "
         "bright eyes.\n"
-        "\"Riddle time,\" it announces. \"Answer right, you pass. Answer wrong, "
+        "\"Question time,\" it announces. \"Answer correct, you pass. Answer wrong, "
         "you don't. Simple as stones.\""
     ),
 ]
 
 # When the troll asks a riddle
 TROLL_ASK_PREFIX = [
-    "\"Right then. Here's your riddle:\"",
-    "\"Listen carefully. You only get one chance at this one:\"",
-    "\"Pay attention. This one separates the clever from the rest:\"",
+    "\"Right then. Here's your question:\"",
+    "\"Pay attention. This one separates the attentive from the rest:\"",
     "\"Try this:\"",
     "\"Here we go then:\"",
 ]
@@ -329,7 +312,7 @@ TROLL_BLOCKS = [
     "\"Oh no you don't,\" the troll says, stepping squarely into your path.",
     "The troll shifts its weight and you find yourself unable to proceed. "
     "It hasn't moved much — it simply takes up a great deal of space.",
-    "\"Riddle first,\" the troll says pleasantly. \"Then bridge.\""
+    "\"Question first,\" the troll says pleasantly. \"Then bridge.\""
 ]
 
 # Ambient messages when player lingers at the bridge

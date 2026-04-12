@@ -107,37 +107,6 @@ class BayesianReputation:
         """Named disposition tier for the current trust level."""
         return trust_to_disposition(self.trust)
 
-    @property
-    def precision(self) -> float:
-        """
-        Concentration of the distribution: confirmations + disconfirmations.
-
-        Low precision = NPC has little evidence and can be swayed easily.
-        High precision = NPC has a well-formed, stable opinion.
-        The starting prior contributes 12.0 (4 + 8), so any value above
-        that represents genuine observed interactions.
-        """
-        return self.confirmations + self.disconfirmations
-
-    @property
-    def uncertainty(self) -> float:
-        """
-        Normalized variance of the distribution, anchored to the starting prior.
-
-        Returns 1.0 at the prior (maximum uncertainty for this model),
-        decreasing monotonically toward 0.0 as evidence accumulates.
-        """
-        c = self.confirmations
-        d = self.disconfirmations
-        n = c + d
-        current_var = (c * d) / (n * n * (n + 1))
-
-        # Variance of the starting prior Beta(2, 6)
-        # = (2 * 6) / (8^2 * 9) = 12 / 576 ≈ 0.02083
-        prior_var = (2.0 * 6.0) / (64.0 * 9.0)
-
-        return min(1.0, current_var / prior_var)
-
     def update(self, event: str) -> bool:
         """
         Apply a named event.  Returns True if the event was recognised.
@@ -151,12 +120,6 @@ class BayesianReputation:
         self.disconfirmations += d_delta
         self.interactions     += 1
         return True
-
-    def update_raw(self, confirm_delta: float, disconfirm_delta: float) -> None:
-        """Apply arbitrary deltas — for one-off scripted moments."""
-        self.confirmations    = max(0.01, self.confirmations    + confirm_delta)
-        self.disconfirmations = max(0.01, self.disconfirmations + disconfirm_delta)
-        self.interactions     += 1
 
     def to_dict(self) -> dict:
         """
