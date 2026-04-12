@@ -119,7 +119,7 @@ RIDDLE_BANK: List[TrollRiddle] = [
             "stairway?"
         ),
         answer="south",
-        accepted=["south", "south"],
+        accepted=["south", "s"],
     )
 ]
 

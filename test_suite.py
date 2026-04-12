@@ -1851,18 +1851,18 @@ def test_troll() -> Suite:
             _eng.TROLL_MEMORY.state().current_rid is not None)
 
     # ── Answer normalisation ──────────────────────────────────
-    r01 = _gri("r01")  # "a map"
-    s.check("bare answer accepted",        _ca(r01, "map"))
-    s.check("article accepted",            _ca(r01, "a map"))
-    s.check("preamble stripped",           _ca(r01, "the answer is a map"))
-    s.check("i think it is stripped",      _ca(r01, "i think it is a map"))
+    r01 = _gri("r01")  # "catfood tin"
+    s.check("bare answer accepted",        _ca(r01, "catfood tin"))
+    s.check("article accepted",            _ca(r01, "the catfood tin"))
+    s.check("preamble stripped",           _ca(r01, "the answer is the catfood tin"))
+    s.check("i think it is stripped",      _ca(r01, "i think it is the catfood tin"))
     s.check("wrong answer rejected",       not _ca(r01, "banana"))
-    r02 = _gri("r02")  # "footsteps"
-    s.check("synonym accepted (steps)",    _ca(r02, "steps"))
-    r03 = _gri("r03")  # "an echo"
-    s.check("echo accepted",               _ca(r03, "echo"))
-    r05 = _gri("r05")  # "a clock"
-    s.check("watch accepted as clock",     _ca(r05, "watch"))
+    r02 = _gri("r02")  # "catnip"
+    s.check("synonym accepted (cat nip)",  _ca(r02, "cat nip"))
+    r03 = _gri("r03")  # "serpents"
+    s.check("the serpent accepted",        _ca(r03, "the serpent"))
+    r05 = _gri("r05")  # "grey"
+    s.check("gray accepted as grey",       _ca(r05, "gray"))
 
     # ── Wrong answer: troll gloats ────────────────────────────
     w = troll_fresh()
@@ -1879,7 +1879,7 @@ def test_troll() -> Suite:
     w = troll_fresh()
     state = _eng.TROLL_MEMORY.state()
     state.current_rid = "r01"
-    out, _ = cmd(w, "answer a map")
+    out, _ = cmd(w, "answer catfood tin")
     s.check("correct answer: success message",
             any(x in out.lower() for x in
                 ["correct", "right", "hm", "recalculating"]), out)
@@ -1892,7 +1892,7 @@ def test_troll() -> Suite:
 
     # ── Full progression: 3 correct opens bridge ──────────────
     w = troll_fresh()
-    _answers = {"r01": "map", "r02": "footsteps", "r03": "echo"}
+    _answers = {"r01": "catfood tin", "r02": "catnip", "r03": "serpents"}
     for rid, ans in _answers.items():
         _eng.TROLL_MEMORY.state().current_rid = rid
         _eng.TROLL_MEMORY.save()
