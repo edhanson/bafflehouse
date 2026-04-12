@@ -10,6 +10,7 @@ so players have fully isolated game state.
 
 import asyncio
 import os
+import sys
 import ptyprocess
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -41,8 +42,9 @@ async def websocket_endpoint(websocket: WebSocket):
     # it's running in a real terminal, so readline, ANSI codes, and
     # isatty() checks all behave correctly.
     proc = ptyprocess.PtyProcessUnicode.spawn(
-        ["python", "main.py"],
-        env={**os.environ, "TERM": "xterm-256color", "WEB_MODE": "1"}
+        [sys.executable, "main.py"],
+        env={**os.environ, "TERM": "xterm-256color", "WEB_MODE": "1"},
+        cwd=os.path.dirname(os.path.abspath(__file__))
     )
 
     async def pty_to_browser():
@@ -50,11 +52,15 @@ async def websocket_endpoint(websocket: WebSocket):
         loop = asyncio.get_event_loop()
         while proc.isalive():
             try:
-                # Read from PTY in a thread so we don't block the event loop.
                 data = await loop.run_in_executor(None, proc.read, 1024)
                 await websocket.send_text(data)
             except EOFError:
-                break  # Game exited cleanly
+                break
+
+        # After the process dies, send its exit status to the browser
+        # so we can diagnose startup crashes. Remove this once working.
+        exit_code = proc.exitstatus
+        await websocket.send_text(f"\r\n[Process exited with code {exit_code}]\r\n")
 
     async def browser_to_pty():
         """Read browser keystrokes and forward them to the game."""
