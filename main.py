@@ -407,6 +407,15 @@ def main() -> None:
             display_help_paged(log)
             continue
 
+        # ── Web mode: disable saving ───────────────────────────────────────
+        # When launched by server.py (Render deployment), the WEB_MODE
+        # environment variable is set to "1".  Saving is disabled in that
+        # context because the Render free tier has no persistent filesystem.
+        # This check has no effect during normal local terminal play.
+        if normalised == "save" and os.environ.get("WEB_MODE"):
+            print_and_log("Saving is not available in the browser version.", log)
+            continue
+
         # ── Engine ────────────────────────────────────────────────────────
         output, pending_clarify = process_input(
             world           = world,

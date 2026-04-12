@@ -42,7 +42,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # isatty() checks all behave correctly.
     proc = ptyprocess.PtyProcessUnicode.spawn(
         ["python", "main.py"],
-        env={**os.environ, "TERM": "xterm-256color"}
+        env={**os.environ, "TERM": "xterm-256color", "WEB_MODE": "1"}
     )
 
     async def pty_to_browser():
