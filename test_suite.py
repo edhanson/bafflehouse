@@ -2084,7 +2084,7 @@ def test_combat() -> Suite:
     w3 = build_demo_world()
     from troll import TrollMemory as _TM
     _eng.TROLL_MEMORY.reset()
-    _answers = {"r01": "map", "r02": "footsteps", "r03": "echo"}
+    _answers = {"r01": "catfood tin", "r02": "catnip", "r03": "serpents"}
     w3.player.location = "bridge"
     for rid, ans in _answers.items():
         _eng.TROLL_MEMORY.state().current_rid = rid
