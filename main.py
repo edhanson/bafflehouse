@@ -274,18 +274,31 @@ def main() -> None:
     log = SessionLog(seed)
 
     # ── World and parser ──────────────────────────────────────────────────
-    world         = build_demo_world()
-    parser_system = ParserSystem.build_default(
-        local_model_dir="./models/all-MiniLM-L6-v2"
-    )
-    pending_clarify: Optional[dict] = None
+    world = build_demo_world()
 
-    if parser_system.embedder.enabled():
-        msg = "Semantic parser enabled (local model only)."
+    # In web mode (WEB_MODE=1, set by server.py) skip loading the sentence-
+    # transformers model entirely.  The model requires ~200 MB of RAM at
+    # runtime which exceeds the Render free tier limit when combined with
+    # Python and torch baseline overhead.  The symbolic parser handles the
+    # vast majority of commands correctly on its own.
+    # In local terminal play, WEB_MODE is not set and the model loads normally.
+    if os.environ.get("WEB_MODE"):
+        # Pass a path that won't exist so the Embedder falls back to
+        # disabled mode without attempting to load torch or the model.
+        parser_system = ParserSystem.build_default(local_model_dir="__no_model__")
+        msg = "Running in browser mode: symbolic parser active."
     else:
-        msg = "Semantic parser unavailable; using symbolic parser only."
-        if parser_system.embedder.load_error:
-            msg += f"\nReason: {parser_system.embedder.load_error}"
+        parser_system = ParserSystem.build_default(
+            local_model_dir="./models/all-MiniLM-L6-v2"
+        )
+        if parser_system.embedder.enabled():
+            msg = "Semantic parser enabled (local model only)."
+        else:
+            msg = "Semantic parser unavailable; using symbolic parser only."
+            if parser_system.embedder.load_error:
+                msg += f"\nReason: {parser_system.embedder.load_error}"
+
+    pending_clarify: Optional[dict] = None
 
     print_and_log(msg, log)
     print()
