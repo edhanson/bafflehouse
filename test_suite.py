@@ -1851,18 +1851,18 @@ def test_troll() -> Suite:
             _eng.TROLL_MEMORY.state().current_rid is not None)
 
     # ── Answer normalisation ──────────────────────────────────
-    r01 = _gri("r01")  # "catfood tin"
-    s.check("bare answer accepted",        _ca(r01, "catfood tin"))
-    s.check("article accepted",            _ca(r01, "the catfood tin"))
-    s.check("preamble stripped",           _ca(r01, "the answer is the catfood tin"))
-    s.check("i think it is stripped",      _ca(r01, "i think it is the catfood tin"))
+    r01 = _gri("r01")  # "deep forest"
+    s.check("bare answer accepted",        _ca(r01, "deep forest"))
+    s.check("article accepted",            _ca(r01, "the deep forest"))
+    s.check("preamble stripped",           _ca(r01, "the answer is the deep forest"))
+    s.check("i think it is stripped",      _ca(r01, "i think it is the deep forest"))
     s.check("wrong answer rejected",       not _ca(r01, "banana"))
-    r02 = _gri("r02")  # "catnip"
-    s.check("synonym accepted (cat nip)",  _ca(r02, "cat nip"))
-    r03 = _gri("r03")  # "serpents"
-    s.check("the serpent accepted",        _ca(r03, "the serpent"))
-    r05 = _gri("r05")  # "grey"
-    s.check("gray accepted as grey",       _ca(r05, "gray"))
+    r02 = _gri("r02")  # "hedges"
+    s.check("synonym accepted (cat nip)",  _ca(r02, "overgrowth"))
+    r03 = _gri("r03")  # "secret study"
+    s.check("the study accepted",          _ca(r03, "the study"))
+    r07 = _gri("r07")  # "ten"
+    s.check("10 accepted as ten",          _ca(r07, "10"))
 
     # ── Wrong answer: troll gloats ────────────────────────────
     w = troll_fresh()
@@ -1879,7 +1879,7 @@ def test_troll() -> Suite:
     w = troll_fresh()
     state = _eng.TROLL_MEMORY.state()
     state.current_rid = "r01"
-    out, _ = cmd(w, "answer catfood tin")
+    out, _ = cmd(w, "answer deep forest")
     s.check("correct answer: success message",
             any(x in out.lower() for x in
                 ["correct", "right", "hm", "recalculating"]), out)
@@ -1892,7 +1892,7 @@ def test_troll() -> Suite:
 
     # ── Full progression: 3 correct opens bridge ──────────────
     w = troll_fresh()
-    _answers = {"r01": "catfood tin", "r02": "catnip", "r03": "serpents"}
+    _answers = {"r01": "deep forest", "r02": "hedges", "r03": "secret study"}
     for rid, ans in _answers.items():
         _eng.TROLL_MEMORY.state().current_rid = rid
         _eng.TROLL_MEMORY.save()
@@ -2084,7 +2084,7 @@ def test_combat() -> Suite:
     w3 = build_demo_world()
     from troll import TrollMemory as _TM
     _eng.TROLL_MEMORY.reset()
-    _answers = {"r01": "catfood tin", "r02": "catnip", "r03": "serpents"}
+    _answers = {"r01": "deep forest", "r02": "hedges", "r03": "secret study"}
     w3.player.location = "bridge"
     for rid, ans in _answers.items():
         _eng.TROLL_MEMORY.state().current_rid = rid

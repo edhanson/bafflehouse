@@ -135,7 +135,31 @@ def handle_examine(world: World, ir: dict) -> Tuple[str, bool]:
         if ent.props.get("activated") and "desc_activated" in ent.props:
             desc = ent.props["desc_activated"]
         elif ent.props.get("liquid") and "desc_water" in ent.props:
-            desc = ent.props["desc_water"]
+            # Water is present but not yet activated — check whether the
+            # player is now wearing the silver ring.  If so, trigger the
+            # basin activation now (they put the ring on after pouring).
+            ring_worn = "silver_ring" in world.player.worn_armour
+            if ring_worn and not ent.props.get("activated", False):
+                # Trigger activation
+                ent.props["activated"] = True
+                try:
+                    from engine import move_entity
+                    move_entity(world, "jeweled_amulet", "stone_basin")
+                    from scoring import TRACKER as _SCORE_TRACKER
+                    _SCORE_TRACKER.award("basin_activated")
+                except Exception:
+                    pass
+                desc = (
+                    "The moment you lean over the basin, the ring on your finger "
+                    "grows warm. The carved serpents seem to writhe — and the water "
+                    "begins to glow with a faint green luminescence.\n\n"
+                    "Something rises from beneath the water: a heavy amulet of "
+                    "green-black stone, bone dry despite the water around it. "
+                    "It comes to rest at the basin's rim as if placed there by "
+                    "an invisible hand."
+                )
+            else:
+                desc = ent.props["desc_water"]
         else:
             desc = ent.props.get("desc", "You see nothing special.")
     elif obj == "oil_lamp":

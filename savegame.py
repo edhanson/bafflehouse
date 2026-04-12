@@ -102,13 +102,23 @@ def _serialise_world(world: "World") -> dict:
     except Exception:
         pass  # NPC state is best-effort
 
+    # ── Scoring milestones ────────────────────────────────────────────────
+    # The TRACKER singleton lives in memory only; save the achieved list so
+    # resuming a session restores the correct score and milestone state.
+    try:
+        from scoring import TRACKER
+        achieved_milestones = TRACKER.achieved()
+    except Exception:
+        achieved_milestones = []
+
     return {
-        "version":  SAVE_VERSION,
-        "clock":    world.clock.now,
-        "player":   player,
-        "rooms":    rooms,
-        "entities": entities,
-        "npc_state": npc_state,
+        "version":            SAVE_VERSION,
+        "clock":              world.clock.now,
+        "player":             player,
+        "rooms":              rooms,
+        "entities":           entities,
+        "npc_state":          npc_state,
+        "achieved_milestones": achieved_milestones,
     }
 
 
@@ -233,6 +243,17 @@ def load_game(world: "World", data: dict) -> str:
                 NPC_MEMORY.save()
             except Exception:
                 pass  # NPC restore is best-effort
+
+        # ── Scoring milestones ────────────────────────────────────────────
+        achieved = data.get("achieved_milestones", [])
+        if achieved:
+            try:
+                from scoring import TRACKER
+                TRACKER.reset()
+                for mid in achieved:
+                    TRACKER.award(mid)
+            except Exception:
+                pass  # scoring restore is best-effort
 
         return "ok"
 

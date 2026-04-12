@@ -56,44 +56,44 @@ RIDDLE_BANK: List[TrollRiddle] = [
     TrollRiddle(
         rid="r01",
         text=(
-            "What unexpected item is found within the forest maze?"
+            "Where is the catfood found?"
         ),
-        answer="catfood tin",
-        accepted=["catfood", "catfood tin", "cat food", "cat food tin", 
-                  "tin", "the catfood", "the catfood tin", 
-                  "the cat food", "the cat food tin", "the tin"],
+        answer="deep forest",
+        accepted=["deep forest", "forest", "forest maze", "the deep forest", 
+                  "the forest", "the forest maze"],
     ),
     TrollRiddle(
         rid="r02",
         text=(
-            "What is growing under the hedges in the overgrown garden?"
+            "What has catnip growing under it?"
         ),
-        answer="catnip",
-        accepted=["catnip", "cat nip", "the catnip", "the cat nip"],
+        answer="hedges",
+        accepted=["hedges", "the hedges", "overgrowth", "the overgrowth"
+                  "overgrown hedges", "the overgrown hedges"],
     ),
     TrollRiddle(
         rid="r03",
         text=(
-            "What figures adorn the basin?"
+            "Where does the basin sit?"
         ),
-        answer="serpents",
-        accepted=["serpents", "serpent", "the serpents", "the serpent"],
+        answer="secret study",
+        accepted=["secret study", "the secret study", "study", "the study"],
     ),
     TrollRiddle(
         rid="r04",
         text=(
-            "What key unlocks the heavy oak door?"
+            "What is the stag made out of?"
         ),
-        answer="brass key",
-        accepted=["brass key", "the brass key"],
+        answer="stone",
+        accepted=["stone"],
     ),
     TrollRiddle(
         rid="r05",
         text=(
-            "What color is the cat?"
+            "What color are the cat's eyes?"
         ),
-        answer="grey",
-        accepted=["grey", "gray"],
+        answer="yellow",
+        accepted=["yellow"],
     ),
     TrollRiddle(
         rid="r06",
@@ -110,16 +110,6 @@ RIDDLE_BANK: List[TrollRiddle] = [
         ),
         answer="ten",
         accepted=["ten", "10", "ten matches", "10 matches"],
-    ),
-    TrollRiddle(
-        rid="r08",
-        text=(
-            "In what direction should one head from "
-            "the upper landing to reach the servants' "
-            "stairway?"
-        ),
-        answer="south",
-        accepted=["south", "s"],
     )
 ]
 

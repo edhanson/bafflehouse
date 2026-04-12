@@ -1835,6 +1835,18 @@ def affordance_bonus(verb: str, ent: Entity, slot_name: str, prep: Optional[str]
         if verb == "unlock" and ent.props.get("key_id") is not None:
             bonus += 1.5
 
+        # OPEN (iobj slot = the tool/instrument): penalise entities that are
+        # the TARGET of opening rather than the tool used to open with.
+        # "open tin with opener" should never resolve opener as the tin.
+        if verb == "open" and prep == "with":
+            if "tool" in ent.tags:
+                bonus += 2.5
+            if "openable" in ent.tags or "container" in ent.tags:
+                bonus -= 2.5
+            # Specifically: items with tool_required are the obj, not the iobj
+            if ent.props.get("tool_required"):
+                bonus -= 3.0
+
         # For instrument-like iobj slots, strongly prefer items in inventory
         # (location == "player") over items sitting in the room.
         # This prevents "unlock door with key" from ambiguously matching a
